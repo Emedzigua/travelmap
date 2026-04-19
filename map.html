@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Moja Cestovateľská Mapa</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+    <style>
+        body { margin: 0; padding: 0; font-family: sans-serif; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+        
+        /* Animované svietielko */
+        .marker {
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            background-color: #00ffcc;
+            box-shadow: 0 0 10px #00ffcc;
+            cursor: pointer;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0px rgba(0, 255, 204, 0.7); }
+            100% { box-shadow: 0 0 0 20px rgba(0, 255, 204, 0); }
+        }
+
+        .mapboxgl-popup-content { border-radius: 10px; padding: 15px; }
+    </style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<script>
+    // SEM VLOŽ SVOJ TOKEN Z KROKU 1
+    mapboxgl.accessToken = 'pk.eyJ1IjoibWFreXl5IiwiYSI6ImNtbzVpc3FtdDB3ZjcycHNneTR5d2R3a2oifQ.Su6Onl3Dn-YL8XIPXRfB6g';
+
+    const map = new mapboxgl.Map({
+        container: 'map',
+        style: 'mapbox://styles/mapbox/dark-v11', // Tmavý luxusný štýl
+        center: [19.6, 48.6], // Stred Slovenska
+        zoom: 3
+    });
+
+    // UKÁŽKA: Funkcia na pridanie miesta
+    function addDestination(lng, lat, title, albumUrl) {
+        const el = document.createElement('div');
+        el.className = 'marker';
+
+        new mapboxgl.Marker(el)
+            .setLngLat([lng, lat])
+            .setPopup(new mapboxgl.Popup({ offset: 25 }) 
+            .setHTML(`<h3>${title}</h3><a href="${albumUrl}" target="_blank">Otvoriť album fotiek 📸</a>`))
+            .addTo(map);
+    }
+
+    // Tu si budeš pridávať svoje miesta (Súradnice: dĺžka, šírka)
+    addDestination(14.4, 50.0, "Praha", "https://photos.google.com/share/..."); 
+    addDestination(2.3, 48.8, "Paríž", "https://photos.google.com/share/...");
+</script>
+
+</body>
+</html>
