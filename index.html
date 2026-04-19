@@ -6,45 +6,26 @@
     <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
     <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
     <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
     <style>
         body { margin: 0; padding: 0; }
         #map { position: absolute; top: 0; bottom: 0; width: 100%; }
-        
         .marker {
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            background-color: #00ffcc;
-            box-shadow: 0 0 15px #00ffcc;
-            cursor: pointer;
-            animation: pulse 2s infinite;
-            border: 2px solid white;
+            width: 15px; height: 15px; border-radius: 50%;
+            cursor: pointer; animation: pulse 2s infinite; border: 2px solid white;
         }
-
         @keyframes pulse {
-            0% { box-shadow: 0 0 0 0px rgba(0, 255, 204, 0.7); }
-            100% { box-shadow: 0 0 0 15px rgba(0, 255, 204, 0); }
+            0% { box-shadow: 0 0 0 0px rgba(255, 255, 255, 0.7); }
+            100% { box-shadow: 0 0 0 15px rgba(255, 255, 255, 0); }
         }
-
-        /* Štýl pre vyskakovacie okno */
-        .mapboxgl-popup-content {
-            background: #1e1e1e;
-            color: white;
-            border-radius: 12px;
-            padding: 10px;
-            border: 1px solid #333;
-        }
-        .mapboxgl-popup-close-button { color: white; }
-        
-        a { color: #00ffcc; text-decoration: none; font-weight: bold; }
+        .mapboxgl-popup-content { background: #1e1e1e; color: white; border-radius: 12px; }
     </style>
 </head>
 <body>
-
 <div id="map"></div>
-
 <script>
     mapboxgl.accessToken = 'pk.eyJ1IjoibWFreXl5IiwiYSI6ImNtbzVpc3FtdDB3ZjcycHNneTR5d2R3a2oifQ.Su6Onl3Dn-YL8XIPXRfB6g';
+    const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSKxSWXvTdARJ382V_ddbLoem05pzFFn_oyDsbcSypciDETuXIHTlA9_xCmAYaZ_AklPPzGFVkpu9Ek/pubhtml';
 
     const map = new mapboxgl.Map({
         container: 'map',
@@ -53,57 +34,46 @@
         zoom: 3
     });
 
-    // --- TVOJE DÁTA (Miestá a Trasy) ---
-    const destinations = [
-        { name: "Praha", coords: [14.43, 50.07], album: "https://photos.google.com" },
-        { name: "Split", coords: [16.44, 43.50], album: "https://photos.google.com" }
-    ];
+    map.on('load', () => {
+        Papa.parse(csvUrl, {
+            download: true,
+            header: true,
+            complete: function(results) {
+                results.data.forEach((row, index) => {
+                    if(!row.Lat || !row.Lng) return;
 
-    // --- FUNKCIA NA VYKRESLENIE CIEST (TRASY) ---
-    function drawRoute(coordsArray) {
-        map.on('load', () => {
-            map.addSource('route', {
-                'type': 'geojson',
-                'data': {
-                    'type': 'Feature',
-                    'properties': {},
-                    'geometry': {
-                        'type': 'LineString',
-                        'coordinates': coordsArray
+                    // 1. Pridanie bodu (Svietielka)
+                    const el = document.createElement('div');
+                    el.className = 'marker';
+                    el.style.backgroundColor = row.Farba || '#00ffcc';
+
+                    new mapboxgl.Marker(el)
+                        .setLngLat([parseFloat(row.Lng), parseFloat(row.Lat)])
+                        .setPopup(new mapboxgl.Popup({ offset: 25 })
+                        .setHTML(`<h3>${row.Mesto}</h3><a href="${row.Album}" target="_blank">Fotky 📸</a>`))
+                        .addTo(map);
+
+                    // 2. Vykreslenie trasy, ak existuje
+                    if(row.Trasa) {
+                        const coords = row.Trasa.split(';').map(c => c.split(',').map(Number));
+                        map.addSource('route' + index, {
+                            'type': 'geojson',
+                            'data': {
+                                'type': 'Feature',
+                                'geometry': { 'type': 'LineString', 'coordinates': coords }
+                            }
+                        });
+                        map.addLayer({
+                            'id': 'route' + index,
+                            'type': 'line',
+                            'source': 'route' + index,
+                            'paint': { 'line-color': row.Farba || '#00ffcc', 'line-width': 2, 'line-dasharray': [2, 1] }
+                        });
                     }
-                }
-            });
-            map.addLayer({
-                'id': 'route',
-                'type': 'line',
-                'source': 'route',
-                'layout': { 'line-join': 'round', 'line-cap': 'round' },
-                'paint': { 'line-color': '#00ffcc', 'line-width': 2, 'line-dasharray': [2, 2] }
-            });
+                });
+            }
         });
-    }
-
-    // --- VYKRESLENIE MIEST ---
-    destinations.forEach(loc => {
-        const el = document.createElement('div');
-        el.className = 'marker';
-
-        new mapboxgl.Marker(el)
-            .setLngLat(loc.coords)
-            .setPopup(new mapboxgl.Popup({ offset: 25 })
-            .setHTML(`<h3>${loc.name}</h3><a href="${loc.album}" target="_blank">Zobraziť fotky 📸</a>`))
-            .addTo(map);
     });
-
-    // Kreslenie čiary medzi Prahou a Splitom
-    drawRoute([ [14.43, 50.07], [16.44, 43.50] ]);
-
-    // --- INTERAKTÍVNA POMÔCKA: Klikni na mapu a v konzole uvidíš súradnice ---
-    map.on('click', (e) => {
-        console.log(`Nové miesto: [${e.lngLat.lng.toFixed(2)}, ${e.lngLat.lat.toFixed(2)}]`);
-        alert(`Súradnice tohto miesta: ${e.lngLat.lng.toFixed(2)}, ${e.lngLat.lat.toFixed(2)}`);
-    });
-
 </script>
 </body>
 </html>
