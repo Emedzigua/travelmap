@@ -11,7 +11,6 @@
         body { margin: 0; padding: 0; background-color: #000; font-family: 'Segoe UI', Roboto, sans-serif; color: white; }
         #map { position: absolute; top: 0; bottom: 0; width: 100%; }
         
-        /* UI Panely */
         .ui-panel {
             position: absolute; background: rgba(15, 15, 15, 0.85);
             backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1);
@@ -31,22 +30,21 @@
         .year-btn.active { background: #00ffcc; color: #000; font-weight: bold; }
         .style-btn { background: #333; border: none; color: white; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-size: 11px; margin-left: 5px; }
 
-        /* Hlavný cieľový marker */
         .marker { width: 18px; height: 18px; border-radius: 50%; border: 3px solid #fff; cursor: pointer; z-index: 50; animation: pulse 2s infinite; }
         @keyframes pulse { 0% { box-shadow: 0 0 0 0px rgba(255,255,255,0.7); } 100% { box-shadow: 0 0 0 15px rgba(255,255,255,0); } }
 
-        /* Štartovací marker */
         .start-marker { width: 8px; height: 8px; border-radius: 50%; background: #fff; border: 1px solid #000; opacity: 0.7; pointer-events: none; z-index: 5; }
-
-        /* Ikony dopravy */
         .transport-icon { font-size: 24px; pointer-events: none; z-index: 10; text-shadow: 0 2px 10px rgba(0,0,0,0.8); }
 
-        /* Popupy */
         .mapboxgl-popup { z-index: 9999 !important; }
         .mapboxgl-popup-content { 
             background: #111 !important; color: white !important; border-radius: 15px; 
             padding: 15px; border: 1px solid #333; box-shadow: 0 10px 25px rgba(0,0,0,0.5);
         }
+        /* Štýl pre biely krížik */
+        .mapboxgl-popup-close-button { color: white; font-size: 20px; padding: 5px 10px; outline: none; }
+        .mapboxgl-popup-close-button:hover { background-color: rgba(255,255,255,0.1); border-radius: 0 15px 0 0; }
+        
         .mapboxgl-popup-tip { border-top-color: #111 !important; border-bottom-color: #111 !important; }
         .popup-link { display: block; margin-top: 12px; background: #00ffcc; color: #000; text-align: center; padding: 10px; border-radius: 10px; text-decoration: none; font-weight: bold; }
         .coords-popup { color: #00ffcc !important; font-weight: bold; font-family: monospace; }
@@ -123,7 +121,6 @@
     function setupFilters() {
         const years = [...new Set(allData.map(d => d.Rok).filter(y => y))].sort().reverse();
         const filterDiv = document.getElementById('year-filter');
-        // Premazať filter pred novým načítaním
         filterDiv.innerHTML = '<button class="year-btn active" onclick="filterYear(\'all\', this)">Všetko</button>';
         years.forEach(year => {
             const btn = document.createElement('button');
@@ -163,16 +160,13 @@
             visibleCount++;
             const farba = row.Farba || '#00ffcc';
 
-            // ELEMENT MARKERA
             const el = document.createElement('div');
             el.className = 'marker';
             el.style.backgroundColor = farba;
             
-            // RUČNÉ OTVÁRANIE POPUPU (aby to fungovalo na 10000%)
             el.addEventListener('click', (e) => {
-                e.stopPropagation(); // Zastaví klik na mapu (súradnice)
-                
-                new mapboxgl.Popup({ offset: 25, closeButton: false })
+                e.stopPropagation(); 
+                new mapboxgl.Popup({ offset: 25, closeButton: true }) // KRÍŽIK PRIDANÝ
                     .setLngLat([lng, lat])
                     .setHTML(`
                         <div style="padding:5px;">
@@ -241,9 +235,7 @@
         document.getElementById('country-count').innerText = `${visibleCount} miest`;
     }
 
-    // KLIKNUTIE NA MAPU (SÚRADNICE)
     map.on('click', (e) => {
-        // Zobrazí súradnice len ak neklikáme na marker
         const coords = `${e.lngLat.lng.toFixed(4)}, ${e.lngLat.lat.toFixed(4)}`;
         new mapboxgl.Popup({ closeButton: true })
             .setLngLat(e.lngLat)
