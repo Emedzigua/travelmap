@@ -2,54 +2,76 @@
 <html lang="sk">
 <head>
     <meta charset="utf-8">
-    <title>Travel Map</title>
+    <title>My Travel Map</title>
     <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
     <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
     <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
     <style>
-        body { margin: 0; padding: 0; background-color: #111; font-family: -apple-system, sans-serif; color: white; }
+        body { margin: 0; padding: 0; background-color: #000; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
         #map { position: absolute; top: 0; bottom: 0; width: 100%; }
         
-        #stats-panel {
-            position: absolute; top: 15px; left: 15px; background: rgba(20, 20, 20, 0.9);
-            padding: 15px; border-radius: 15px; border: 1px solid #333; z-index: 10;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5); max-width: 250px;
+        /* UI Panely */
+        .ui-panel {
+            position: absolute; background: rgba(15, 15, 15, 0.85);
+            backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px; padding: 15px; z-index: 10; box-shadow: 0 8px 32px rgba(0,0,0,0.5);
         }
         
-        #country-count { color: #00ffcc; font-size: 22px; font-weight: bold; margin: 5px 0; }
-        .filter-label { font-size: 12px; color: #888; text-transform: uppercase; margin-top: 10px; }
-        #year-filter { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
-        .year-btn { background: #222; border: 1px solid #444; color: white; padding: 4px 12px; border-radius: 20px; cursor: pointer; font-size: 13px; }
-        .year-btn.active { background: #00ffcc; color: #111; border-color: #00ffcc; font-weight: bold; }
+        #stats-panel { top: 15px; left: 15px; width: 220px; }
+        #style-panel { top: 15px; right: 60px; padding: 8px; } /* Vedľa kompasu */
 
-        .marker { width: 16px; height: 16px; border-radius: 50%; border: 2px solid white; cursor: pointer; animation: pulse 2s infinite; }
-        @keyframes pulse { 0% { box-shadow: 0 0 0 0px rgba(255,255,255,0.7); } 100% { box-shadow: 0 0 0 15px rgba(255,255,255,0); } }
+        .count-val { color: #00ffcc; font-size: 24px; font-weight: 800; display: block; }
+        .label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
 
-        .transport-icon { font-size: 22px; text-shadow: 0 0 5px rgba(0,0,0,0.5); pointer-events: none; z-index: 1; }
-
-        .add-button {
-            position: fixed; bottom: 30px; right: 25px; width: 65px; height: 65px;
-            background-color: #00ffcc; border-radius: 50%; display: flex; align-items: center;
-            justify-content: center; font-size: 35px; color: #111; text-decoration: none;
-            box-shadow: 0 8px 25px rgba(0,0,0,0.6); z-index: 100;
+        #year-filter { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 10px; }
+        .year-btn { 
+            background: #252525; border: none; color: #ccc; padding: 5px 12px; 
+            border-radius: 8px; cursor: pointer; font-size: 12px; transition: 0.3s;
         }
+        .year-btn.active { background: #00ffcc; color: #000; font-weight: bold; }
 
-        .mapboxgl-popup-content { background: #1e1e1e !important; color: white !important; border-radius: 12px; padding: 15px; border: 1px solid #444; }
-        .popup-link { display: block; margin-top: 10px; background: #00ffcc; color: #111; text-align: center; padding: 8px; border-radius: 8px; text-decoration: none; font-weight: bold; }
+        /* Mapa prepínač */
+        .style-btn { background: #333; border: none; color: white; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-size: 11px; }
+        .style-btn:hover { background: #444; }
+
+        /* Markery */
+        .marker { width: 18px; height: 18px; border-radius: 50%; border: 3px solid #fff; cursor: pointer; transition: 0.3s; }
+        .marker:hover { transform: scale(1.3); }
+
+        .transport-icon { font-size: 24px; pointer-events: none; z-index: 5; text-shadow: 0 2px 10px rgba(0,0,0,0.8); }
+
+        /* Pridávacie tlačidlo */
+        .add-button {
+            position: fixed; bottom: 30px; right: 25px; width: 60px; height: 60px;
+            background: linear-gradient(135deg, #00ffcc, #00d2d3); border-radius: 50%;
+            display: flex; align-items: center; justify-content: center; font-size: 30px;
+            color: #000; text-decoration: none; box-shadow: 0 10px 20px rgba(0,255,204,0.3);
+            z-index: 100; transition: 0.3s;
+        }
+        .add-button:hover { transform: translateY(-5px) rotate(90deg); }
+
+        /* Popups */
+        .mapboxgl-popup-content { background: #111 !important; color: white !important; border-radius: 15px; padding: 15px; border: 1px solid #333; }
+        .popup-link { display: block; margin-top: 12px; background: #00ffcc; color: #000; text-align: center; padding: 10px; border-radius: 10px; text-decoration: none; font-weight: bold; font-size: 13px; }
     </style>
 </head>
 <body>
 
 <div id="map"></div>
 
-<div id="stats-panel">
-    <div style="font-size: 14px; color: #aaa;">Celkovo navštívené</div>
-    <div id="country-count">0 miest</div>
-    <div class="filter-label">Filter podľa roku</div>
+<div id="stats-panel" class="ui-panel">
+    <span class="label">Moje Dobrodružstvá</span>
+    <span id="country-count" class="count-val">0 miest</span>
+    <div class="label" style="margin-top:15px;">Filtrovať rok</div>
     <div id="year-filter">
         <button class="year-btn active" onclick="filterYear('all', this)">Všetko</button>
     </div>
+</div>
+
+<div id="style-panel" class="ui-panel">
+    <button class="style-btn" onclick="changeStyle('mapbox://styles/mapbox/satellite-streets-v12')">🛰️ Satelit</button>
+    <button class="style-btn" onclick="changeStyle('mapbox://styles/mapbox/dark-v11')">🌑 Dark</button>
 </div>
 
 <a href="https://docs.google.com/spreadsheets/d/1HC5V_ZK9LTL12lzxRqp0nNYL5u_PkVT8FazjXmKl8k4/edit?gid=0#gid=0" target="_blank" class="add-button">+</a>
@@ -62,17 +84,28 @@
     let allData = [];
     let markers = [];
     let routeLayers = [];
-    let animationMarkers = [];
+    let transportMarkers = [];
 
     const map = new mapboxgl.Map({
         container: 'map',
         style: 'mapbox://styles/mapbox/dark-v11',
-        center: [19.6, 48.6],
-        zoom: 3,
-        pitch: 45
+        center: [15, 48],
+        zoom: 3.5,
+        pitch: 45,
+        antialias: true
     });
 
-    map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+    map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), 'top-right');
+
+    // Prepínač mapy
+    function changeStyle(styleUrl) {
+        map.setStyle(styleUrl);
+        // Po zmene štýlu musíme znova vykresliť dáta, lebo Mapbox vymaže vrstvy
+        map.once('styledata', () => renderMap(currentYear));
+    }
+
+    let currentYear = 'all';
+
     map.on('load', loadData);
 
     function loadData() {
@@ -93,7 +126,10 @@
             const btn = document.createElement('button');
             btn.className = 'year-btn';
             btn.innerText = year;
-            btn.onclick = (e) => filterYear(year, e.target);
+            btn.onclick = (e) => { 
+                currentYear = year;
+                filterYear(year, e.target);
+            };
             filterDiv.appendChild(btn);
         });
     }
@@ -106,12 +142,12 @@
 
     function renderMap(yearFilter) {
         markers.forEach(m => m.remove());
-        animationMarkers.forEach(m => m.remove());
+        transportMarkers.forEach(m => m.remove());
         routeLayers.forEach(l => { 
             if(map.getLayer(l)) map.removeLayer(l); 
             if(map.getSource(l)) map.removeSource(l); 
         });
-        markers = []; routeLayers = []; animationMarkers = [];
+        markers = []; routeLayers = []; transportMarkers = [];
 
         let visibleCount = 0;
 
@@ -125,23 +161,25 @@
             visibleCount++;
             const farba = row.Farba || '#00ffcc';
 
-            // --- OPRAVA: MARKER S POPUPOM ---
+            // HLAVNÝ BOD
             const el = document.createElement('div');
             el.className = 'marker';
             el.style.backgroundColor = farba;
+            el.style.boxShadow = `0 0 20px ${farba}66`;
             
-            const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(`
-                <h3 style="margin:0; color:white;">${row.Mesto}</h3>
-                <p style="color:#aaa; margin:5px 0;">Rok: ${row.Rok} | ${row.Typ || 'Cesta'}</p>
-                ${row.Album ? `<a href="${row.Album}" target="_blank" class="popup-link">Pozrieť album 📸</a>` : ''}
+            const popup = new mapboxgl.Popup({ offset: 25, closeButton: false }).setHTML(`
+                <div style="padding:5px;">
+                    <strong style="font-size:16px;">${row.Mesto}</strong><br>
+                    <span style="color:#888; font-size:11px;">${row.Start ? row.Start + ' ➔ ' : ''}${row.Mesto} (${row.Rok})</span>
+                    <p style="margin:8px 0; font-size:13px; line-height:1.4;">${row.Popis || ''}</p>
+                    ${row.Album ? `<a href="${row.Album}" target="_blank" class="popup-link">Otvoriť album 📸</a>` : ''}
+                </div>
             `);
 
-            const m = new mapboxgl.Marker(el)
-                .setLngLat([lng, lat])
-                .setPopup(popup) // Toto zabezpečí, že po kliknutí na bod uvidíš info
-                .addTo(map);
+            const m = new mapboxgl.Marker(el).setLngLat([lng, lat]).setPopup(popup).addTo(map);
             markers.push(m);
 
+            // TRASA A ANIMÁCIA
             if (row.Trasa && row.Trasa.includes(',')) {
                 try {
                     const points = row.Trasa.split(';').map(p => p.trim().split(',').map(Number));
@@ -150,11 +188,12 @@
                     map.addSource(id, { 'type': 'geojson', 'data': { 'type': 'Feature', 'geometry': { 'type': 'LineString', 'coordinates': points } } });
                     map.addLayer({
                         'id': id, 'type': 'line', 'source': id,
-                        'paint': { 'line-color': farba, 'line-width': 1.5, 'line-dasharray': [2, 1] }
+                        'layout': { 'line-join': 'round', 'line-cap': 'round' },
+                        'paint': { 'line-color': farba, 'line-width': 2, 'line-opacity': 0.6 }
                     });
                     routeLayers.push(id);
 
-                    // IKONY DOPRAVY (Vrátane VLAKU 🚂)
+                    // Ikony
                     let iconText = '●';
                     const typ = (row.Typ || '').toLowerCase();
                     if (typ.includes('lietadlo')) iconText = '✈️';
@@ -166,18 +205,14 @@
                     transportEl.className = 'transport-icon';
                     transportEl.innerText = iconText;
 
-                    const tMarker = new mapboxgl.Marker(transportEl)
-                        .setLngLat(points[0])
-                        .addTo(map);
-                    animationMarkers.push(tMarker);
+                    const tMarker = new mapboxgl.Marker(transportEl).setLngLat(points[0]).addTo(map);
+                    transportMarkers.push(tMarker);
 
                     let counter = 0;
-                    const steps = 600; 
-
                     function animate() {
-                        if (!animationMarkers.includes(tMarker)) return;
-                        counter = (counter + 0.5) % steps;
-                        const ratio = counter / steps;
+                        if (!transportMarkers.includes(tMarker)) return;
+                        counter = (counter + 0.4) % 600;
+                        const ratio = counter / 600;
                         const pointIndex = Math.floor(ratio * (points.length - 1));
                         const nextPointIndex = Math.min(pointIndex + 1, points.length - 1);
                         const segmentRatio = (ratio * (points.length - 1)) - pointIndex;
@@ -187,22 +222,15 @@
                         requestAnimationFrame(animate);
                     }
                     animate();
-
-                } catch(e) { console.log("Chyba trasy", e); }
+                } catch(e) {}
             }
         });
         document.getElementById('country-count').innerText = `${visibleCount} miest`;
     }
 
-    // --- OPRAVA: KLIKNUTIE NA MAPU PRE SÚRADNICE ---
     map.on('click', (e) => {
-        // Ak klikneš na marker, Mapbox automaticky otvorí popup markera.
-        // Ak klikneš na "prázdnu" mapu, zobrazíme súradnice:
         const coords = `${e.lngLat.lng.toFixed(4)}, ${e.lngLat.lat.toFixed(4)}`;
-        new mapboxgl.Popup()
-            .setLngLat(e.lngLat)
-            .setHTML(`<div style="color:black; padding:5px;">Súradnice pre Tabuľku:<br><strong>${coords}</strong></div>`)
-            .addTo(map);
+        new mapboxgl.Popup().setLngLat(e.lngLat).setHTML(`<div style="color:#000; font-weight:bold; padding:5px;">Súradnice:<br>${coords}</div>`).addTo(map);
     });
 </script>
 </body>
