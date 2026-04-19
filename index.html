@@ -143,16 +143,23 @@
                     });
                     routeLayers.push(id);
 
-                    // LOGIKA PRE IKONU DOPRAVY
-                    let iconText = '●'; // Default bodka
-                    const typ = (row.Typ || '').toLowerCase();
-                    if (typ.includes('lietadlo')) iconText = '✈️';
-                    else if (typ.includes('auto')) iconText = '🚗';
-                    else if (typ.includes('pešo')) iconText = '🚶';
+// LOGIKA PRE IKONU DOPRAVY (Vlak, Lietadlo, Auto, Pešo)
+let iconText = '●'; // Defaultná bodka
+const typ = (row.Typ || '').toLowerCase();
 
-                    const transportEl = document.createElement('div');
-                    transportEl.className = 'transport-icon';
-                    transportEl.innerText = iconText;
+if (typ.includes('lietadlo')) {
+    iconText = '✈️';
+} else if (typ.includes('auto')) {
+    iconText = '🚗';
+} else if (typ.includes('vlak')) {
+    iconText = '🚂';
+} else if (typ.includes('pešo')) {
+    iconText = '🚶';
+}
+
+const transportEl = document.createElement('div');
+transportEl.className = 'transport-icon';
+transportEl.innerText = iconText;
 
                     const tMarker = new mapboxgl.Marker(transportEl)
                         .setLngLat(points[0])
