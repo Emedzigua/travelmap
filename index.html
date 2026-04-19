@@ -1,79 +1,159 @@
 <!DOCTYPE html>
-<html>
+<html lang="sk">
 <head>
     <meta charset="utf-8">
-    <title>Travel Map</title>
+    <title>Moja Mapa Ciest</title>
     <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    
     <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
     <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+
     <style>
-        body { margin: 0; padding: 0; }
+        body { margin: 0; padding: 0; background-color: #111; }
         #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+        
+        /* Štýl pre svietiace body */
         .marker {
-            width: 15px; height: 15px; border-radius: 50%;
-            cursor: pointer; animation: pulse 2s infinite; border: 2px solid white;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid white;
+            animation: pulse 2s infinite;
         }
+
         @keyframes pulse {
             0% { box-shadow: 0 0 0 0px rgba(255, 255, 255, 0.7); }
             100% { box-shadow: 0 0 0 15px rgba(255, 255, 255, 0); }
         }
-        .mapboxgl-popup-content { background: #1e1e1e; color: white; border-radius: 12px; }
+
+        /* Bublina s informáciami */
+        .mapboxgl-popup-content {
+            background: #1e1e1e !important;
+            color: white !important;
+            border-radius: 12px;
+            padding: 15px;
+            font-family: sans-serif;
+            border: 1px solid #444;
+        }
+        .mapboxgl-popup-close-button { color: white; }
+        .popup-link {
+            display: inline-block;
+            margin-top: 8px;
+            color: #00ffcc;
+            text-decoration: none;
+            font-weight: bold;
+            border: 1px solid #00ffcc;
+            padding: 5px 10px;
+            border-radius: 5px;
+        }
     </style>
 </head>
 <body>
+
 <div id="map"></div>
+
 <script>
-    mapboxgl.accessToken = 'pk.eyJ1IjoibWFreXl5IiwiYSI6ImNtbzVpc3FtdDB3ZjcycHNneTR5d2R3a2oifQ.Su6Onl3Dn-YL8XIPXRfB6g';
-    const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSKxSWXvTdARJ382V_ddbLoem05pzFFn_oyDsbcSypciDETuXIHTlA9_xCmAYaZ_AklPPzGFVkpu9Ek/pubhtml';
+    // Tvoje prístupové údaje
+    const mapboxToken = 'pk.eyJ1IjoibWFreXl5IiwiYSI6ImNtbzVpc3FtdDB3ZjcycHNneTR5d2R3a2oifQ.Su6Onl3Dn-YL8XIPXRfB6g';
+    const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSKxSWXvTdARJ382V_ddbLoem05pzFFn_oyDsbcSypciDETuXIHTlA9_xCmAYaZ_AklPPzGFVkpu9Ek/pub?output=csv';
+
+    mapboxgl.accessToken = mapboxToken;
 
     const map = new mapboxgl.Map({
         container: 'map',
-        style: 'mapbox://styles/mapbox/dark-v11',
-        center: [19.6, 48.6],
+        style: 'mapbox://styles/mapbox/dark-v11', // Tmavá mapa
+        center: [19.6, 48.6], // Stred Európy
         zoom: 3
     });
 
+    // Funkcia na spracovanie dát z tabuľky
     map.on('load', () => {
         Papa.parse(csvUrl, {
             download: true,
             header: true,
+            skipEmptyLines: true,
             complete: function(results) {
-                results.data.forEach((row, index) => {
-                    if(!row.Lat || !row.Lng) return;
+                const data = results.data;
 
-                    // 1. Pridanie bodu (Svietielka)
+                data.forEach((row, index) => {
+                    const lat = parseFloat(row.Lat);
+                    const lng = parseFloat(row.Lng);
+                    const farba = row.Farba || '#00ffcc'; // Predvolená tyrkysová
+
+                    if (isNaN(lat) || isNaN(lng)) return;
+
+                    // 1. PRIDANIE BODU NA MAPU
                     const el = document.createElement('div');
                     el.className = 'marker';
-                    el.style.backgroundColor = row.Farba || '#00ffcc';
+                    el.style.backgroundColor = farba;
+                    // Prispôsobenie farby pulzovania podľa stĺpca Farba
+                    el.style.boxShadow = `0 0 10px ${farba}`;
 
                     new mapboxgl.Marker(el)
-                        .setLngLat([parseFloat(row.Lng), parseFloat(row.Lat)])
+                        .setLngLat([lng, lat])
                         .setPopup(new mapboxgl.Popup({ offset: 25 })
-                        .setHTML(`<h3>${row.Mesto}</h3><a href="${row.Album}" target="_blank">Fotky 📸</a>`))
+                        .setHTML(`
+                            <h3 style="margin:0">${row.Mesto}</h3>
+                            ${row.Album ? `<a href="${row.Album}" target="_blank" class="popup-link">📸 Pozrieť fotky</a>` : '<p>Žiadny album</p>'}
+                        `))
                         .addTo(map);
 
-                    // 2. Vykreslenie trasy, ak existuje
-                    if(row.Trasa) {
-                        const coords = row.Trasa.split(';').map(c => c.split(',').map(Number));
-                        map.addSource('route' + index, {
-                            'type': 'geojson',
-                            'data': {
-                                'type': 'Feature',
-                                'geometry': { 'type': 'LineString', 'coordinates': coords }
-                            }
-                        });
-                        map.addLayer({
-                            'id': 'route' + index,
-                            'type': 'line',
-                            'source': 'route' + index,
-                            'paint': { 'line-color': row.Farba || '#00ffcc', 'line-width': 2, 'line-dasharray': [2, 1] }
-                        });
+                    // 2. VYKRESLENIE TRASY (ak sú v stĺpci Trasa súradnice)
+                    if (row.Trasa && row.Trasa.trim() !== "") {
+                        try {
+                            // Rozdelenie trasy podľa bodkočiarky a čiarok
+                            const points = row.Trasa.split(';').map(p => {
+                                const pair = p.trim().split(',');
+                                return [parseFloat(pair[0]), parseFloat(pair[1])];
+                            });
+
+                            const routeId = 'route' + index;
+
+                            map.addSource(routeId, {
+                                'type': 'geojson',
+                                'data': {
+                                    'type': 'Feature',
+                                    'geometry': {
+                                        'type': 'LineString',
+                                        'coordinates': points
+                                    }
+                                }
+                            });
+
+                            map.addLayer({
+                                'id': routeId,
+                                'type': 'line',
+                                'source': routeId,
+                                'layout': { 'line-join': 'round', 'line-cap': 'round' },
+                                'paint': {
+                                    'line-color': farba,
+                                    'line-width': 2,
+                                    'line-dasharray': [2, 1] // Prerušovaná čiara
+                                }
+                            });
+                        } catch (e) {
+                            console.error("Chyba pri kreslení trasy pre: " + row.Mesto, e);
+                        }
                     }
                 });
             }
         });
     });
+
+    // Pomôcka: Kliknutím na mapu získaš súradnice do tabuľky
+    map.on('click', (e) => {
+        const coords = `${e.lngLat.lng.toFixed(4)}, ${e.lngLat.lat.toFixed(4)}`;
+        console.log("Súradnice pre tabuľku: " + coords);
+        // Voliteľné: zobrazí súradnice v malom okne, aby si ich mohol skopírovať do Sheets
+        new mapboxgl.Popup()
+            .setLngLat(e.lngLat)
+            .setHTML(`Súradnice: <br><strong>${coords}</strong>`)
+            .addTo(map);
+    });
 </script>
+
 </body>
 </html>
