@@ -29,18 +29,17 @@
             border-radius: 8px; cursor: pointer; font-size: 12px; transition: 0.3s;
         }
         .year-btn.active { background: #00ffcc; color: #000; font-weight: bold; }
-
         .style-btn { background: #333; border: none; color: white; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-size: 11px; margin-left: 5px; }
 
         /* Hlavný cieľový marker */
-        .marker { width: 18px; height: 18px; border-radius: 50%; border: 3px solid #fff; cursor: pointer; z-index: 5; animation: pulse 2s infinite; }
+        .marker { width: 18px; height: 18px; border-radius: 50%; border: 3px solid #fff; cursor: pointer; z-index: 50; animation: pulse 2s infinite; }
         @keyframes pulse { 0% { box-shadow: 0 0 0 0px rgba(255,255,255,0.7); } 100% { box-shadow: 0 0 0 15px rgba(255,255,255,0); } }
 
-        /* Štartovací marker (decentná bodka) */
-        .start-marker { width: 8px; height: 8px; border-radius: 50%; background: #fff; border: 1px solid #000; opacity: 0.7; pointer-events: none; z-index: 3; }
+        /* Štartovací marker */
+        .start-marker { width: 8px; height: 8px; border-radius: 50%; background: #fff; border: 1px solid #000; opacity: 0.7; pointer-events: none; z-index: 5; }
 
         /* Ikony dopravy */
-        .transport-icon { font-size: 24px; pointer-events: none; z-index: 4; text-shadow: 0 2px 10px rgba(0,0,0,0.8); }
+        .transport-icon { font-size: 24px; pointer-events: none; z-index: 10; text-shadow: 0 2px 10px rgba(0,0,0,0.8); }
 
         /* Popupy */
         .mapboxgl-popup { z-index: 9999 !important; }
@@ -124,6 +123,8 @@
     function setupFilters() {
         const years = [...new Set(allData.map(d => d.Rok).filter(y => y))].sort().reverse();
         const filterDiv = document.getElementById('year-filter');
+        // Premazať filter pred novým načítaním
+        filterDiv.innerHTML = '<button class="year-btn active" onclick="filterYear(\'all\', this)">Všetko</button>';
         years.forEach(year => {
             const btn = document.createElement('button');
             btn.className = 'year-btn';
@@ -143,7 +144,6 @@
     }
 
     function renderMap(yearFilter) {
-        // Vyčistenie starých prvkov
         [...markers, ...startMarkers, ...transportMarkers].forEach(m => m.remove());
         routeLayers.forEach(l => { 
             if(map.getLayer(l)) map.removeLayer(l); 
@@ -163,31 +163,36 @@
             visibleCount++;
             const farba = row.Farba || '#00ffcc';
 
-            // HLAVNÝ CIEĽOVÝ MARKER
+            // ELEMENT MARKERA
             const el = document.createElement('div');
             el.className = 'marker';
             el.style.backgroundColor = farba;
             
-            const popup = new mapboxgl.Popup({ offset: 25, closeButton: false, focusAfterOpen: false }).setHTML(`
-                <div style="padding:5px;">
-                    <strong style="font-size:16px; color:#fff;">${row.Mesto}</strong><br>
-                    <span style="color:#888; font-size:11px;">${row.Start ? row.Start + ' ➔ ' : ''}${row.Mesto} (${row.Rok})</span>
-                    <p style="margin:8px 0; font-size:13px; line-height:1.4; color:#ccc;">${row.Popis || ''}</p>
-                    ${row.Album ? `<a href="${row.Album}" target="_blank" class="popup-link">Otvoriť album 📸</a>` : ''}
-                </div>
-            `);
+            // RUČNÉ OTVÁRANIE POPUPU (aby to fungovalo na 10000%)
+            el.addEventListener('click', (e) => {
+                e.stopPropagation(); // Zastaví klik na mapu (súradnice)
+                
+                new mapboxgl.Popup({ offset: 25, closeButton: false })
+                    .setLngLat([lng, lat])
+                    .setHTML(`
+                        <div style="padding:5px;">
+                            <strong style="font-size:16px; color:#fff;">${row.Mesto}</strong><br>
+                            <span style="color:#888; font-size:11px;">${row.Start ? row.Start + ' ➔ ' : ''}${row.Mesto} (${row.Rok})</span>
+                            <p style="margin:8px 0; font-size:13px; line-height:1.4; color:#ccc;">${row.Popis || ''}</p>
+                            ${row.Album ? `<a href="${row.Album}" target="_blank" class="popup-link">Otvoriť album 📸</a>` : ''}
+                        </div>
+                    `)
+                    .addTo(map);
+            });
 
-            const m = new mapboxgl.Marker(el).setLngLat([lng, lat]).setPopup(popup).addTo(map);
-            el.addEventListener('click', (e) => e.stopPropagation());
+            const m = new mapboxgl.Marker(el).setLngLat([lng, lat]).addTo(map);
             markers.push(m);
 
-            // TRASA A DOPLNKY
             if (row.Trasa && row.Trasa.includes(',')) {
                 try {
                     const points = row.Trasa.split(';').map(p => p.trim().split(',').map(Number));
                     const id = 'route' + i;
                     
-                    // 1. Štartovacia bodka (decentná)
                     if (row.Start) {
                         const sEl = document.createElement('div');
                         sEl.className = 'start-marker';
@@ -195,7 +200,6 @@
                         startMarkers.push(sm);
                     }
 
-                    // 2. Vykreslenie čiary
                     map.addSource(id, { 'type': 'geojson', 'data': { 'type': 'Feature', 'geometry': { 'type': 'LineString', 'coordinates': points } } });
                     map.addLayer({
                         'id': id, 'type': 'line', 'source': id,
@@ -204,7 +208,6 @@
                     });
                     routeLayers.push(id);
 
-                    // 3. Ikona dopravy
                     let iconText = '●';
                     const typ = (row.Typ || '').toLowerCase();
                     if (typ.includes('lietadlo')) iconText = '✈️';
@@ -238,10 +241,9 @@
         document.getElementById('country-count').innerText = `${visibleCount} miest`;
     }
 
-    // Kliknutie pre súradnice (len ak neklikneme na marker)
+    // KLIKNUTIE NA MAPU (SÚRADNICE)
     map.on('click', (e) => {
-        if (e.originalEvent.target.classList.contains('marker')) return;
-        
+        // Zobrazí súradnice len ak neklikáme na marker
         const coords = `${e.lngLat.lng.toFixed(4)}, ${e.lngLat.lat.toFixed(4)}`;
         new mapboxgl.Popup({ closeButton: true })
             .setLngLat(e.lngLat)
