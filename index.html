@@ -26,8 +26,7 @@
         .marker { width: 16px; height: 16px; border-radius: 50%; border: 2px solid white; cursor: pointer; animation: pulse 2s infinite; }
         @keyframes pulse { 0% { box-shadow: 0 0 0 0px rgba(255,255,255,0.7); } 100% { box-shadow: 0 0 0 15px rgba(255,255,255,0); } }
 
-        /* Ikona pre animáciu */
-        .transport-icon { font-size: 20px; text-shadow: 0 0 5px rgba(0,0,0,0.5); pointer-events: none; }
+        .transport-icon { font-size: 22px; text-shadow: 0 0 5px rgba(0,0,0,0.5); pointer-events: none; z-index: 1; }
 
         .add-button {
             position: fixed; bottom: 30px; right: 25px; width: 65px; height: 65px;
@@ -35,6 +34,9 @@
             justify-content: center; font-size: 35px; color: #111; text-decoration: none;
             box-shadow: 0 8px 25px rgba(0,0,0,0.6); z-index: 100;
         }
+
+        .mapboxgl-popup-content { background: #1e1e1e !important; color: white !important; border-radius: 12px; padding: 15px; border: 1px solid #444; }
+        .popup-link { display: block; margin-top: 10px; background: #00ffcc; color: #111; text-align: center; padding: 8px; border-radius: 8px; text-decoration: none; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -123,14 +125,23 @@
             visibleCount++;
             const farba = row.Farba || '#00ffcc';
 
-            // Marker cieľa
+            // --- OPRAVA: MARKER S POPUPOM ---
             const el = document.createElement('div');
             el.className = 'marker';
             el.style.backgroundColor = farba;
-            const m = new mapboxgl.Marker(el).setLngLat([lng, lat]).addTo(map);
+            
+            const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(`
+                <h3 style="margin:0; color:white;">${row.Mesto}</h3>
+                <p style="color:#aaa; margin:5px 0;">Rok: ${row.Rok} | ${row.Typ || 'Cesta'}</p>
+                ${row.Album ? `<a href="${row.Album}" target="_blank" class="popup-link">Pozrieť album 📸</a>` : ''}
+            `);
+
+            const m = new mapboxgl.Marker(el)
+                .setLngLat([lng, lat])
+                .setPopup(popup) // Toto zabezpečí, že po kliknutí na bod uvidíš info
+                .addTo(map);
             markers.push(m);
 
-            // Trasa a Animácia transportu
             if (row.Trasa && row.Trasa.includes(',')) {
                 try {
                     const points = row.Trasa.split(';').map(p => p.trim().split(',').map(Number));
@@ -143,46 +154,35 @@
                     });
                     routeLayers.push(id);
 
-// LOGIKA PRE IKONU DOPRAVY (Vlak, Lietadlo, Auto, Pešo)
-let iconText = '●'; // Defaultná bodka
-const typ = (row.Typ || '').toLowerCase();
+                    // IKONY DOPRAVY (Vrátane VLAKU 🚂)
+                    let iconText = '●';
+                    const typ = (row.Typ || '').toLowerCase();
+                    if (typ.includes('lietadlo')) iconText = '✈️';
+                    else if (typ.includes('auto')) iconText = '🚗';
+                    else if (typ.includes('vlak')) iconText = '🚂';
+                    else if (typ.includes('pešo')) iconText = '🚶';
 
-if (typ.includes('lietadlo')) {
-    iconText = '✈️';
-} else if (typ.includes('auto')) {
-    iconText = '🚗';
-} else if (typ.includes('vlak')) {
-    iconText = '🚂';
-} else if (typ.includes('pešo')) {
-    iconText = '🚶';
-}
-
-const transportEl = document.createElement('div');
-transportEl.className = 'transport-icon';
-transportEl.innerText = iconText;
+                    const transportEl = document.createElement('div');
+                    transportEl.className = 'transport-icon';
+                    transportEl.innerText = iconText;
 
                     const tMarker = new mapboxgl.Marker(transportEl)
                         .setLngLat(points[0])
                         .addTo(map);
                     animationMarkers.push(tMarker);
 
-                    // Animácia pohybu
                     let counter = 0;
-                    const steps = 1200; // Rýchlosť (čím viac, tým pomalšie)
+                    const steps = 600; 
 
                     function animate() {
                         if (!animationMarkers.includes(tMarker)) return;
-                        counter = (counter + 1) % steps;
+                        counter = (counter + 0.5) % steps;
                         const ratio = counter / steps;
-                        
-                        // Výpočet pozície na čiare
                         const pointIndex = Math.floor(ratio * (points.length - 1));
                         const nextPointIndex = Math.min(pointIndex + 1, points.length - 1);
                         const segmentRatio = (ratio * (points.length - 1)) - pointIndex;
-
                         const currentLng = points[pointIndex][0] + (points[nextPointIndex][0] - points[pointIndex][0]) * segmentRatio;
                         const currentLat = points[pointIndex][1] + (points[nextPointIndex][1] - points[pointIndex][1]) * segmentRatio;
-
                         tMarker.setLngLat([currentLng, currentLat]);
                         requestAnimationFrame(animate);
                     }
@@ -194,9 +194,15 @@ transportEl.innerText = iconText;
         document.getElementById('country-count').innerText = `${visibleCount} miest`;
     }
 
+    // --- OPRAVA: KLIKNUTIE NA MAPU PRE SÚRADNICE ---
     map.on('click', (e) => {
+        // Ak klikneš na marker, Mapbox automaticky otvorí popup markera.
+        // Ak klikneš na "prázdnu" mapu, zobrazíme súradnice:
         const coords = `${e.lngLat.lng.toFixed(4)}, ${e.lngLat.lat.toFixed(4)}`;
-        new mapboxgl.Popup().setLngLat(e.lngLat).setHTML(`Súradnice:<br><strong>${coords}</strong>`).addTo(map);
+        new mapboxgl.Popup()
+            .setLngLat(e.lngLat)
+            .setHTML(`<div style="color:black; padding:5px;">Súradnice pre Tabuľku:<br><strong>${coords}</strong></div>`)
+            .addTo(map);
     });
 </script>
 </body>
