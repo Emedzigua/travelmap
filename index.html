@@ -11,175 +11,186 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
 
     <style>
-        body { margin: 0; padding: 0; background-color: #111; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        body { margin: 0; padding: 0; background-color: #111; font-family: -apple-system, sans-serif; color: white; }
         #map { position: absolute; top: 0; bottom: 0; width: 100%; }
         
-        /* Štýl pre svietiace body */
-        .marker {
-            width: 14px;
-            height: 14px;
-            border-radius: 50%;
-            cursor: pointer;
-            border: 2px solid white;
-            animation: pulse 2s infinite;
+        /* Horný panel so štatistikou a filtrami */
+        #stats-panel {
+            position: absolute; top: 15px; left: 15px; 
+            background: rgba(20, 20, 20, 0.9);
+            padding: 15px; border-radius: 15px; 
+            border: 1px solid #333; z-index: 10;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            max-width: 250px;
         }
-
-        @keyframes pulse {
-            0% { box-shadow: 0 0 0 0px rgba(255, 255, 255, 0.7); }
-            100% { box-shadow: 0 0 0 15px rgba(255, 255, 255, 0); }
-        }
-
-        /* Bublina s informáciami */
-        .mapboxgl-popup-content {
-            background: #1e1e1e !important;
-            color: white !important;
-            border-radius: 12px;
-            padding: 15px;
-            border: 1px solid #444;
-        }
-        .mapboxgl-popup-close-button { color: white; padding: 5px; }
         
-        .popup-link {
-            display: inline-block;
-            margin-top: 10px;
-            color: #111;
-            background-color: #00ffcc;
-            text-decoration: none;
-            font-weight: bold;
-            padding: 8px 12px;
-            border-radius: 8px;
-            text-align: center;
+        #country-count { color: #00ffcc; font-size: 22px; font-weight: bold; margin: 5px 0; }
+        
+        /* Filter rokov */
+        .filter-label { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-top: 10px; }
+        #year-filter { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+        .year-btn { 
+            background: #222; border: 1px solid #444; color: white; padding: 4px 12px; 
+            border-radius: 20px; cursor: pointer; font-size: 13px; transition: 0.2s;
         }
+        .year-btn.active { background: #00ffcc; color: #111; border-color: #00ffcc; font-weight: bold; }
 
-        /* Plávajúce tlačidlo PRIDAŤ */
+        /* Svietiaci bod */
+        .marker { width: 16px; height: 16px; border-radius: 50%; border: 2px solid white; cursor: pointer; animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0px rgba(255,255,255,0.7); } 100% { box-shadow: 0 0 0 15px rgba(255,255,255,0); } }
+
+        /* Plávajúce tlačidlo + */
         .add-button {
-            position: fixed;
-            bottom: 30px;
-            right: 25px;
-            width: 65px;
-            height: 65px;
-            background-color: #00ffcc;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 35px;
-            color: #111;
-            text-decoration: none;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.6);
-            z-index: 9999;
-            cursor: pointer;
-            transition: transform 0.2s ease;
+            position: fixed; bottom: 30px; right: 25px; width: 65px; height: 65px;
+            background-color: #00ffcc; border-radius: 50%; display: flex; align-items: center;
+            justify-content: center; font-size: 35px; color: #111; text-decoration: none;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.6); z-index: 100; transition: transform 0.2s;
         }
         .add-button:active { transform: scale(0.9); }
 
-        /* Úprava ovládacích prvkov mapy */
-        .mapboxgl-ctrl-group {
-            background: rgba(30, 30, 30, 0.8) !important;
-            border: 1px solid #444 !important;
-        }
-        .mapboxgl-ctrl button span { filter: invert(1); }
+        /* Popup okno */
+        .mapboxgl-popup-content { background: #1e1e1e !important; color: white !important; border-radius: 12px; padding: 15px; border: 1px solid #444; }
+        .popup-link { display: block; margin-top: 10px; background: #00ffcc; color: #111; text-align: center; padding: 8px; border-radius: 8px; text-decoration: none; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div id="map"></div>
 
+<div id="stats-panel">
+    <div style="font-size: 14px; color: #aaa;">Celkovo navštívené</div>
+    <div id="country-count">0 miest</div>
+    
+    <div class="filter-label">Filter podľa roku</div>
+    <div id="year-filter">
+        <button class="year-btn active" onclick="filterYear('all', this)">Všetko</button>
+    </div>
+</div>
+
 <a href="https://docs.google.com/spreadsheets/d/1HC5V_ZK9LTL12lzxRqp0nNYL5u_PkVT8FazjXmKl8k4/edit?gid=0#gid=0" target="_blank" class="add-button">+</a>
 
 <script>
-    // TVOJE ÚDAJE
     const mapboxToken = 'pk.eyJ1IjoibWFreXl5IiwiYSI6ImNtbzVpc3FtdDB3ZjcycHNneTR5d2R3a2oifQ.Su6Onl3Dn-YL8XIPXRfB6g';
     const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSKxSWXvTdARJ382V_ddbLoem05pzFFn_oyDsbcSypciDETuXIHTlA9_xCmAYaZ_AklPPzGFVkpu9Ek/pub?output=csv';
 
     mapboxgl.accessToken = mapboxToken;
+    let allData = [];
+    let markers = [];
+    let routeLayers = [];
 
     const map = new mapboxgl.Map({
         container: 'map',
         style: 'mapbox://styles/mapbox/dark-v11',
         center: [19.6, 48.6],
         zoom: 3,
-        pitch: 45 // Mierny náklon mapy pre 3D efekt
+        pitch: 45
     });
 
-    // PRIDANIE KOMPASU A OVLÁDANIA (Zoom, Rotácia)
-    map.addControl(new mapboxgl.NavigationControl({
-        visualizePitch: true,
-        showZoom: true,
-        showCompass: true
-    }), 'top-right');
+    map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), 'top-right');
 
-    // Spracovanie dát z Google Sheets
-    map.on('load', () => {
+    map.on('load', loadData);
+
+    function loadData() {
         Papa.parse(csvUrl, {
-            download: true,
-            header: true,
-            skipEmptyLines: true,
+            download: true, header: true, skipEmptyLines: true,
             complete: function(results) {
-                results.data.forEach((row, index) => {
-                    const lat = parseFloat(row.Lat);
-                    const lng = parseFloat(row.Lng);
-                    const farba = row.Farba || '#00ffcc';
-
-                    if (isNaN(lat) || isNaN(lng)) return;
-
-                    // 1. Bod (Marker)
-                    const el = document.createElement('div');
-                    el.className = 'marker';
-                    el.style.backgroundColor = farba;
-                    el.style.boxShadow = `0 0 12px ${farba}`;
-
-                    new mapboxgl.Marker(el)
-                        .setLngLat([lng, lat])
-                        .setPopup(new mapboxgl.Popup({ offset: 25 })
-                        .setHTML(`
-                            <h3 style="margin:0 0 10px 0; border-bottom: 1px solid #444; padding-bottom: 5px;">${row.Mesto}</h3>
-                            ${row.Album ? `<a href="${row.Album}" target="_blank" class="popup-link">Otvoriť album 📸</a>` : '<p style="color:#888">Žiadne fotky</p>'}
-                        `))
-                        .addTo(map);
-
-                    // 2. Trasa (Čiara)
-                    if (row.Trasa && row.Trasa.trim() !== "") {
-                        try {
-                            const points = row.Trasa.split(';').map(p => {
-                                const pair = p.trim().split(',');
-                                return [parseFloat(pair[0]), parseFloat(pair[1])];
-                            });
-
-                            const routeId = 'route' + index;
-                            map.addSource(routeId, {
-                                'type': 'geojson',
-                                'data': {
-                                    'type': 'Feature',
-                                    'geometry': { 'type': 'LineString', 'coordinates': points }
-                                }
-                            });
-                            map.addLayer({
-                                'id': routeId,
-                                'type': 'line',
-                                'source': routeId,
-                                'paint': {
-                                    'line-color': farba,
-                                    'line-width': 2.5,
-                                    'line-dasharray': [2, 1]
-                                }
-                            });
-                        } catch (e) { console.error("Chyba trasy:", e); }
-                    }
-                });
+                allData = results.data;
+                setupFilters();
+                renderMap('all');
             }
         });
-    });
+    }
 
-    // Pomôcka pre súradnice na kliknutie
+    function setupFilters() {
+        const years = [...new Set(allData.map(d => d.Rok).filter(y => y))].sort().reverse();
+        const filterDiv = document.getElementById('year-filter');
+        years.forEach(year => {
+            const btn = document.createElement('button');
+            btn.className = 'year-btn';
+            btn.innerText = year;
+            btn.onclick = (e) => filterYear(year, e.target);
+            filterDiv.appendChild(btn);
+        });
+    }
+
+    function filterYear(year, btnElement) {
+        document.querySelectorAll('.year-btn').forEach(b => b.classList.remove('active'));
+        btnElement.classList.add('active');
+        renderMap(year);
+    }
+
+    function renderMap(yearFilter) {
+        // Vyčistenie mapy
+        markers.forEach(m => m.remove());
+        routeLayers.forEach(l => { 
+            if(map.getLayer(l)) map.removeLayer(l); 
+            if(map.getSource(l)) map.removeSource(l); 
+        });
+        markers = []; routeLayers = [];
+
+        let visibleCount = 0;
+
+        allData.forEach((row, i) => {
+            if (yearFilter !== 'all' && row.Rok !== yearFilter) return;
+
+            const lat = parseFloat(row.Lat);
+            const lng = parseFloat(row.Lng);
+            if (isNaN(lat) || isNaN(lng)) return;
+
+            visibleCount++;
+            const farba = row.Farba || '#00ffcc';
+
+            // Bod (Marker)
+            const el = document.createElement('div');
+            el.className = 'marker';
+            el.style.backgroundColor = farba;
+            el.style.boxShadow = `0 0 10px ${farba}`;
+
+            const m = new mapboxgl.Marker(el)
+                .setLngLat([lng, lat])
+                .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML(`
+                    <h3 style="margin:0">${row.Mesto}</h3>
+                    <p style="color:#888; margin:5px 0;">Rok: ${row.Rok} | ${row.Typ || 'Cesta'}</p>
+                    ${row.Album ? `<a href="${row.Album}" target="_blank" class="popup-link">Pozrieť album 📸</a>` : ''}
+                `))
+                .addTo(map);
+            markers.push(m);
+
+            // Trasa s animáciou
+            if (row.Trasa && row.Trasa.includes(',')) {
+                try {
+                    const points = row.Trasa.split(';').map(p => p.trim().split(',').map(Number));
+                    const id = 'route' + i;
+                    
+                    map.addSource(id, { 'type': 'geojson', 'data': { 'type': 'Feature', 'geometry': { 'type': 'LineString', 'coordinates': points } } });
+                    map.addLayer({
+                        'id': id, 'type': 'line', 'source': id,
+                        'paint': { 'line-color': farba, 'line-width': 2, 'line-dasharray': [2, 1] }
+                    });
+                    routeLayers.push(id);
+                    
+                    // Animácia "tečúcej" čiary
+                    let step = 0;
+                    function animateLine() {
+                        step = (step + 0.2) % 4;
+                        if(map.getLayer(id)) {
+                            map.setPaintProperty(id, 'line-dasharray', [2, 1, step/2]);
+                            requestAnimationFrame(animateLine);
+                        }
+                    }
+                    animateLine();
+                } catch(e) { console.log("Chyba v trase:", row.Mesto); }
+            }
+        });
+
+        document.getElementById('country-count').innerText = `${visibleCount} miest`;
+    }
+
+    // Pomôcka pre súradnice
     map.on('click', (e) => {
         const coords = `${e.lngLat.lng.toFixed(4)}, ${e.lngLat.lat.toFixed(4)}`;
-        new mapboxgl.Popup()
-            .setLngLat(e.lngLat)
-            .setHTML(`Súradnice pre Tabuľku:<br><strong style="color:#00ffcc">${coords}</strong>`)
-            .addTo(map);
+        new mapboxgl.Popup().setLngLat(e.lngLat).setHTML(`Súradnice pre Tabuľku:<br><strong>${coords}</strong>`).addTo(map);
     });
 </script>
-
 </body>
 </html>
