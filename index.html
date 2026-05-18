@@ -62,6 +62,16 @@
         .start-marker { width: 8px; height: 8px; border-radius: 50%; background: #fff; border: 1px solid #000; opacity: 0.7; pointer-events: none; z-index: 5; }
         .transport-icon { font-size: 24px; pointer-events: none; z-index: 10; text-shadow: 0 2px 10px rgba(0,0,0,0.8); }
 
+        /* Globálny štýl pre VŠETKY Mapbox Popup okná (vrátane kliku na súradnice) */
+        .mapboxgl-popup { z-index: 9999 !important; }
+        .mapboxgl-popup-content { 
+            background: #111 !important; color: white !important; border-radius: 15px; 
+            padding: 15px; border: 1px solid #333; box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        }
+        .mapboxgl-popup-close-button { color: white; font-size: 20px; padding: 5px 10px; outline: none; }
+        .mapboxgl-popup-close-button:hover { background-color: rgba(255,255,255,0.1); border-radius: 0 15px 0 0; }
+        .mapboxgl-popup-tip { border-top-color: #111 !important; border-bottom-color: #111 !important; }
+
         /* Veľké Vyskakovacie Okno (Modal) */
         #city-modal {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -86,12 +96,18 @@
         .modal-subtitle { color: #666; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 25px; }
         
         /* Časová os v okne */
-        .timeline { border-left: 2px solid #252525; margin-left: 10px; padding-left: 20px; position: relative; }
-        .timeline-item { position: relative; margin-bottom: 30px; }
+        .timeline { border-left: 2px solid #252525; margin-left: 10px; padding-left: 25px; position: relative; }
+        .timeline-item { position: relative; margin-bottom: 30px; padding-top: 2px; }
         .timeline-item:last-child { margin-bottom: 10px; }
+        
+        /* Oprava prekrývania roku a názvu trasy z fotky */
+        .timeline-header { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; flex-wrap: wrap; }
+        .timeline-title-text { font-size: 14px; font-weight: 600; color: #aaa; }
+        
         .timeline-badge {
-            position: absolute; left: -31px; top: 2px; background: #00ffcc; color: black;
-            font-size: 11px; font-weight: bold; padding: 3px 7px; border-radius: 6px; box-shadow: 0 0 10px rgba(0,255,204,0.4);
+            background: #00ffcc; color: black; font-size: 11px; font-weight: bold; 
+            padding: 3px 8px; border-radius: 6px; box-shadow: 0 0 10px rgba(0,255,204,0.3);
+            display: inline-block;
         }
         .timeline-badge.wish { background: #ffb142; box-shadow: none; }
         .timeline-desc { font-size: 14px; line-height: 1.5; color: #ccc; margin: 8px 0; }
@@ -176,16 +192,14 @@
         map.once('styledata', () => renderMap(currentYear));
     }
 
-    // Spustenie sťahovania dát hneď na začiatku
     fetch(csvUrl).then(res => res.text()).then(csvText => {
         Papa.parse(csvText, {
             header: true, skipEmptyLines: true,
             complete: function(results) {
                 allData = results.data;
-                // Vytiahnutie hesla z tabuľky (stĺpec L alebo hľadaním kľúča)
                 const passRow = allData.find(r => r.Heslo || Object.values(r).includes('Heslo'));
                 if(passRow) {
-                    securePassword = passRow.Heslo || Object.values(passRow)[11]; // Predpoklad stĺpca L
+                    securePassword = passRow.Heslo || Object.values(passRow)[11];
                 }
             }
         });
@@ -201,12 +215,10 @@
         } else {
             const err = document.getElementById('auth-error');
             err.style.display = 'block';
-            err.style.animation = 'shake 0.3s';
         }
     }
 
     function setupFilters() {
-        // Získanie unikátnych rokov (vynechá textové záznamy a Wishlist)
         const years = [...new Set(allData.map(d => d.Rok).filter(y => y && !isNaN(y)))].sort().reverse();
         const filterDiv = document.getElementById('year-filter');
         filterDiv.innerHTML = '<button class="year-btn active" onclick="filterYear(\'all\', this)">Všetko</button>';
@@ -219,7 +231,6 @@
             filterDiv.appendChild(btn);
         });
 
-        // Pridanie špeciálneho tlačidla pre Wishlist
         if(allData.some(d => (d.Rok || '').toLowerCase() === 'wishlist')) {
             const wishBtn = document.createElement('button');
             wishBtn.className = 'year-btn';
@@ -241,7 +252,6 @@
         routeLayers.forEach(l => { if(map.getLayer(l)) map.removeLayer(l); if(map.getSource(l)) map.removeSource(l); });
         markers = []; startMarkers = []; routeLayers = []; transportMarkers = [];
 
-        // Filtrovanie dát podľa roku alebo wishlistu
         let filteredRows = allData.filter(row => {
             const lat = parseFloat(row.Lat);
             if (isNaN(lat)) return false;
@@ -249,11 +259,9 @@
             return (row.Rok || '').toLowerCase() === yearFilter.toLowerCase();
         });
 
-        // Výpočet UNIKÁTNYCH miest pre počítadlo
         let uniqueCities = [...new Set(filteredRows.map(r => r.Mesto.trim().toLowerCase()))];
         document.getElementById('country-count').innerText = `${uniqueCities.length} ${uniqueCities.length === 1 ? 'mesto' : uniqueCities.length < 5 ? 'miesta' : 'miest'}`;
 
-        // Zoskupenie bodov na rovnakých súradniciach, aby sa markery neprekrývali
         let cityGroups = {};
         filteredRows.forEach(row => {
             const key = `${parseFloat(row.Lat).toFixed(4)},${parseFloat(row.Lng).toFixed(4)}`;
@@ -273,7 +281,6 @@
             el.className = 'marker' + (isWishlist ? ' wishlist-marker' : '');
             el.style.backgroundColor = farba;
             
-            // Otvorenie veľkého Modálneho okna s detailmi
             el.addEventListener('click', (e) => {
                 e.stopPropagation();
                 openCityModal(firstRow.Mesto, lat, lng, group);
@@ -282,7 +289,6 @@
             const m = new mapboxgl.Marker(el).setLngLat([lng, lat]).addTo(map);
             markers.push(m);
 
-            // Generovanie Trasy (Mapbox Directions API pre reálne cesty na základe miest)
             if (firstRow.Trasa && firstRow.Trasa.trim().length > 3) {
                 const routeId = 'route-' + index;
                 generateRealRoute(firstRow.Trasa, farba, routeId, firstRow.Typ, firstRow.Start, [lng, lat]);
@@ -290,12 +296,10 @@
         });
     }
 
-    // Funkcia, ktorá kontaktuje Mapbox a premení názvy miest na reálnu trasu po cestách
     function generateRealRoute(trasaString, farba, routeId, typ, startCity, targetCoords) {
         const zastavky = trasaString.split(';').map(z => z.trim());
         if(zastavky.length < 2) return;
 
-        // Mapbox vyžaduje súradnice. Najprv preto stiahneme polohu pre všetky mestá v trase
         let promises = zastavky.map(mesto => 
             fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(mesto)}.json?access_token=${mapboxToken}`)
             .then(res => res.json())
@@ -306,7 +310,6 @@
             const validCoords = coordsArray.filter(c => c !== null);
             if(validCoords.length < 2) return;
 
-            // Ak máš nastavený štart, vytvorí to malú bodku
             if (startCity) {
                 const sEl = document.createElement('div');
                 sEl.className = 'start-marker';
@@ -314,15 +317,21 @@
                 startMarkers.push(sm);
             }
 
-            // Volanie Mapbox Directions API pre získanie skutočnej cesty po diaľniciach
-            const profile = (typ || '').toLowerCase().includes('pešo') ? 'walking' : 'driving';
+            const t = (typ || '').toLowerCase();
+            
+            // PRAVIDLO PRE LIETADLO: Ak ide o lietadlo, urobí sa rovno priama čiara a nevolá sa cestná navigácia
+            if (t.includes('lietadlo')) {
+                drawStraightLine(validCoords, farba, routeId, typ);
+                return;
+            }
+
+            const profile = t.includes('pešo') ? 'walking' : 'driving';
             const coordString = validCoords.map(c => `${c[0]},${c[1]}`).join(';');
             
             fetch(`https://api.mapbox.com/directions/v5/mapbox/${profile}/${coordString}?geometries=geojson&overview=full&access_token=${mapboxToken}`)
             .then(res => res.json())
             .then(dirData => {
                 if(!dirData.routes || dirData.routes.length === 0) return;
-                
                 const routeGeometry = dirData.routes[0].geometry;
 
                 map.addSource(routeId, { 'type': 'geojson', 'data': { 'type': 'Feature', 'geometry': routeGeometry } });
@@ -332,11 +341,8 @@
                     'paint': { 'line-color': farba, 'line-width': 2.5, 'line-opacity': 0.5 }
                 });
                 routeLayers.push(routeId);
-
-                // Spustenie animovanej ikonky dopravy po reálnej ceste
                 animateTransport(routeGeometry.coordinates, typ);
             }).catch(() => {
-                // Záložný plán: Ak Mapbox nevie nájsť cestu (napr. cez oceán), spraví priamu čiaru
                 drawStraightLine(validCoords, farba, routeId, typ);
             });
         });
@@ -366,7 +372,7 @@
         let counter = 0;
         function step() {
             if (!transportMarkers.includes(tMarker)) return;
-            counter = (counter + 0.2) % 800; // Rýchlosť animácie auta/lietadla
+            counter = (counter + 0.2) % 800;
             const ratio = counter / 800;
             const pointIndex = Math.floor(ratio * (coordinates.length - 1));
             const nextPointIndex = Math.min(pointIndex + 1, coordinates.length - 1);
@@ -381,7 +387,6 @@
         step();
     }
 
-    // Logika pre veľké vyskakovacie okno (Modal) a časovú os
     function openCityModal(cityName, lat, lng, visitsGroup) {
         document.getElementById('modal-city-name').innerText = cityName;
         document.getElementById('modal-city-coords').innerText = `${lng.toFixed(4)}° E, ${lat.toFixed(4)}° N`;
@@ -389,7 +394,6 @@
         const timelineDiv = document.getElementById('modal-timeline');
         timelineDiv.innerHTML = '';
 
-        // Zoradenie návštev od najnovšej po najstaršiu
         visitsGroup.sort((a,b) => b.Rok - a.Rok).forEach(visit => {
             const item = document.createElement('div');
             item.className = 'timeline-item';
@@ -397,10 +401,15 @@
             const isWish = (visit.Rok || '').toLowerCase() === 'wishlist';
             const badgeClass = isWish ? 'timeline-badge wish' : 'timeline-badge';
             const badgeText = isWish ? 'PLÁN' : visit.Rok;
+            const routeTitle = visit.Start ? `${visit.Start} ➔ ${visit.Mesto}` : visit.Mesto;
+            const typeText = visit.Typ ? `(${visit.Typ})` : '';
 
+            // Opravená štruktúra - pridaný timeline-header, aby sa text neprekrýval s rokom
             item.innerHTML = `
-                <span class="${badgeClass}">${badgeText}</span>
-                <div style="font-size: 12px; color: #666;">${visit.Start ? visit.Start + ' ➔ ' : ''}${visit.Mesto} ${visit.Typ ? `(${visit.Typ})` : ''}</div>
+                <div class="timeline-header">
+                    <span class="${badgeClass}">${badgeText}</span>
+                    <span class="timeline-title-text">${routeTitle} ${typeText}</span>
+                </div>
                 <div class="timeline-desc">${visit.Popis || 'Bez popisu.'}</div>
                 ${visit.Album ? `<a href="${visit.Album}" target="_blank" class="modal-link">Pozrieť fotky z výletu 📸</a>` : ''}
             `;
@@ -414,7 +423,6 @@
         document.getElementById('city-modal').classList.remove('open');
     }
 
-    // Kliknutie na mapu pre získanie čistých súradníc pre tabuľku
     map.on('click', (e) => {
         const coords = `${e.lngLat.lng.toFixed(4)}, ${e.lngLat.lat.toFixed(4)}`;
         new mapboxgl.Popup({ closeButton: true })
