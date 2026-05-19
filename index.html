@@ -499,49 +499,58 @@
 
     // Odosielanie dát cez Apps Script na pozadí bez prebíjania stránky
     function submitTrip(event) {
-        event.preventDefault();
-        
-        const btn = document.getElementById('submit-btn');
-        const oldText = btn.innerText;
-        btn.innerText = 'Ukladám do Google tabuľky... ⏳';
-        btn.style.opacity = '0.6';
-        btn.disabled = true;
+    event.preventDefault();
+    
+    const btn = document.getElementById('submit-btn');
+    const oldText = btn.innerText;
+    btn.innerText = 'Ukladám do Google tabuľky... ⏳';
+    btn.style.opacity = '0.6';
+    btn.disabled = true;
 
-        const isWishlist = document.getElementById('f-rok').value.trim().toLowerCase() === 'wishlist';
-        const defaultColor = isWishlist ? '#ffb142' : document.getElementById('f-farba').value;
+    const isWishlist = document.getElementById('f-rok').value.trim().toLowerCase() === 'wishlist';
+    const defaultColor = isWishlist ? '#ffb142' : document.getElementById('f-farba').value;
 
-        const tripData = {
-            mesto: document.getElementById('f-mesto').value,
-            lat: document.getElementById('f-lat').value,
-            lng: document.getElementById('f-lng').value,
-            rok: document.getElementById('f-rok').value,
-            farba: defaultColor,
-            start: document.getElementById('f-start').value,
-            trasa: document.getElementById('f-trasa').value,
-            typ: document.getElementById('f-typ').value,
-            popis: document.getElementById('f-popis').value,
-            album: document.getElementById('f-album').value
-        };
+    const tripData = {
+        mesto: document.getElementById('f-mesto').value,
+        lat: document.getElementById('f-lat').value,
+        lng: document.getElementById('f-lng').value,
+        rok: document.getElementById('f-rok').value,
+        farba: defaultColor,
+        start: document.getElementById('f-start').value,
+        trasa: document.getElementById('f-trasa').value,
+        typ: document.getElementById('f-typ').value,
+        popis: document.getElementById('f-popis').value,
+        album: document.getElementById('f-album').value
+    };
 
-        fetch(scriptUrl, {
-            method: 'POST',
-            mode: 'no-cors',
-            cache: 'no-cache',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(tripData)
-        }).then(() => {
-            alert('🎉 Paráda! Trip bol úspešne zapísaný. Pre prenesenie zmien na mapu stačí obnoviť (F5) stránku.');
+    // Upravené odosielanie formou klasického URL kódovania, ktoré Google Web Apps milujú
+    fetch(scriptUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(tripData)
+    })
+    .then(res => res.json())
+    .then(response => {
+        if (response.status === 'success') {
+            alert('🎉 Paráda! Trip bol úspešne zapísaný do tabuľky. Pre prenesenie zmien na mapu stačí obnoviť (F5) stránku.');
             closeModal('add-modal');
-            btn.innerText = oldText;
-            btn.style.opacity = '1';
-            btn.disabled = false;
-        }).catch(err => {
-            alert('Ojoj, niečo zlyhalo: ' + err);
-            btn.innerText = oldText;
-            btn.style.opacity = '1';
-            btn.disabled = false;
-        });
-    }
+        } else {
+            alert('Google skript vrátil chybu: ' + response.message);
+        }
+        btn.innerText = oldText;
+        btn.style.opacity = '1';
+        btn.disabled = false;
+    })
+    .catch(err => {
+        // Ak to zlyhá na CORS (čo Google pri presmerovaniach robí), ale dáta napriek tomu prejdú
+        // Spravíme kontrolný oznam pre užívateľa
+        alert('🚀 Požiadavka bola odoslaná! Skontroluj Google tabuľku, či sa riadok zapísal. Ak áno, stačí obnoviť mapu.');
+        closeModal('add-modal');
+        btn.innerText = oldText;
+        btn.style.opacity = '1';
+        btn.disabled = false;
+    });
+}
 
     // NOVÉ INTELIGENTNÉ KLIKNUTIE NA MAPU: Automaticky otvorí formulár a nahodí súradnice
     map.on('click', (e) => {
