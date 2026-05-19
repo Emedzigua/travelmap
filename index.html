@@ -9,7 +9,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
     <style>
         body { margin: 0; padding: 0; background-color: #000; font-family: 'Segoe UI', Roboto, sans-serif; color: white; overflow: hidden; }
-        #map { position: absolute; top: 0; bottom: 0; width: 100%; opacity: 0; transition: opacity 0.5s ease; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; opacity: 0; transition: opacity 0.5s ease; cursor: crosshair; }
         #map.visible { opacity: 1; }
         
         /* Ochranná obrazovka na heslo */
@@ -44,7 +44,7 @@
         #style-panel { top: 15px; right: 60px; padding: 8px; }
 
         .count-val { color: #00ffcc; font-size: 24px; font-weight: 800; display: block; }
-        .label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+        .label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 1px; display: block; margin-bottom: 4px; }
 
         #year-filter { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 10px; }
         .year-btn { 
@@ -62,45 +62,35 @@
         .start-marker { width: 8px; height: 8px; border-radius: 50%; background: #fff; border: 1px solid #000; opacity: 0.7; pointer-events: none; z-index: 5; }
         .transport-icon { font-size: 24px; pointer-events: none; z-index: 10; text-shadow: 0 2px 10px rgba(0,0,0,0.8); }
 
-        /* Globálny štýl pre VŠETKY Mapbox Popup okná (vrátane kliku na súradnice) */
-        .mapboxgl-popup { z-index: 9999 !important; }
-        .mapboxgl-popup-content { 
-            background: #111 !important; color: white !important; border-radius: 15px; 
-            padding: 15px; border: 1px solid #333; box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-        }
-        .mapboxgl-popup-close-button { color: white; font-size: 20px; padding: 5px 10px; outline: none; }
-        .mapboxgl-popup-close-button:hover { background-color: rgba(255,255,255,0.1); border-radius: 0 15px 0 0; }
-        .mapboxgl-popup-tip { border-top-color: #111 !important; border-bottom-color: #111 !important; }
-
-        /* Veľké Vyskakovacie Okno (Modal) */
-        #city-modal {
+        /* Spoločné vlastnosti pre vyskakovacie okná (Modaly) */
+        .modal-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(8px);
-            display: flex; align-items: center; justify-content: center;
-            z-index: 20000; opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+            background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(8px);
+            display: none; align-items: center; justify-content: center;
+            z-index: 20000; opacity: 0; transition: opacity 0.3s ease;
         }
-        #city-modal.open { opacity: 1; pointer-events: auto; }
+        .modal-overlay.open { display: flex; opacity: 1; }
+        
         .modal-content {
             background: #141414; border: 1px solid rgba(255,255,255,0.1);
-            width: 90%; max-width: 550px; max-height: 80vh; border-radius: 24px;
+            width: 90%; max-width: 550px; max-height: 85vh; border-radius: 24px;
             padding: 30px; position: relative; box-shadow: 0 25px 50px rgba(0,0,0,0.7);
-            overflow-y: auto; color: white;
+            overflow-y: auto; color: white; box-sizing: border-box;
         }
         .modal-close {
             position: absolute; top: 20px; right: 20px; background: #252525;
             border: none; color: white; font-size: 22px; width: 40px; height: 40px;
-            border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s;
+            border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; z-index: 10;
         }
         .modal-close:hover { background: #ff4d4d; color: white; }
-        .modal-title { font-size: 28px; font-weight: 800; color: #00ffcc; margin-bottom: 5px; }
+        .modal-title { font-size: 26px; font-weight: 800; color: #00ffcc; margin-bottom: 5px; padding-right: 30px; }
         .modal-subtitle { color: #666; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 25px; }
         
-        /* Časová os v okne */
+        /* Časová os v detaile mesta */
         .timeline { border-left: 2px solid #252525; margin-left: 10px; padding-left: 25px; position: relative; }
         .timeline-item { position: relative; margin-bottom: 30px; padding-top: 2px; }
         .timeline-item:last-child { margin-bottom: 10px; }
         
-        /* Oprava prekrývania roku a názvu trasy z fotky */
         .timeline-header { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; flex-wrap: wrap; }
         .timeline-title-text { font-size: 14px; font-weight: 600; color: #aaa; }
         
@@ -109,19 +99,28 @@
             padding: 3px 8px; border-radius: 6px; box-shadow: 0 0 10px rgba(0,255,204,0.3);
             display: inline-block;
         }
-        .timeline-badge.wish { background: #ffb142; box-shadow: none; }
+        .timeline-badge.wish { background: #ffb142; color: black; box-shadow: none; }
         .timeline-desc { font-size: 14px; line-height: 1.5; color: #ccc; margin: 8px 0; }
         .modal-link { display: inline-block; background: #252525; color: #00ffcc; border: 1px solid rgba(0,255,204,0.2); padding: 8px 16px; border-radius: 8px; text-decoration: none; font-size: 13px; font-weight: bold; transition: 0.3s; }
         .modal-link:hover { background: #00ffcc; color: black; }
+
+        /* Prvky formulára */
+        .form-group { margin-bottom: 15px; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 15px; }
+        .form-input {
+            width: 100%; padding: 10px 14px; background: #1e1e1e; border: 1px solid #333; 
+            color: white; border-radius: 8px; box-sizing: border-box; font-size: 14px; outline: none; transition: 0.2s;
+        }
+        .form-input:focus { border-color: #00ffcc; background: #252526; }
+        .form-textarea { resize: none; font-family: inherit; }
 
         .add-button {
             position: fixed; bottom: 30px; right: 25px; width: 45px; height: 45px;
             background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 50%;
             display: flex; align-items: center; justify-content: center; font-size: 20px;
-            color: #888; text-decoration: none; backdrop-filter: blur(5px); z-index: 100; transition: 0.3s;
+            color: #888; text-decoration: none; backdrop-filter: blur(5px); z-index: 100; transition: 0.3s; box-shadow: 0 4px 15px rgba(0,0,0,0.3);
         }
         .add-button:hover { background: #00ffcc; color: black; transform: scale(1.1); }
-        .coords-popup { color: #00ffcc !important; font-weight: bold; font-family: monospace; }
     </style>
 </head>
 <body>
@@ -153,20 +152,85 @@
     <button class="style-btn" onclick="changeStyle('mapbox://styles/mapbox/dark-v11')">🌑 Dark</button>
 </div>
 
-<div id="city-modal" onclick="closeModal()">
+<div id="city-modal" class="modal-overlay" onclick="closeModal('city-modal')">
     <div class="modal-content" onclick="event.stopPropagation()">
-        <button class="modal-close" onclick="closeModal()">×</button>
+        <button class="modal-close" onclick="closeModal('city-modal')">×</button>
         <div id="modal-city-name" class="modal-title">Mesto</div>
         <div id="modal-city-coords" class="modal-subtitle">Súradnice</div>
         <div id="modal-timeline" class="timeline"></div>
     </div>
 </div>
 
-<a href="https://docs.google.com/spreadsheets/d/1HC5V_ZK9LTL12lzxRqp0nNYL5u_PkVT8FazjXmKl8k4/edit?gid=0#gid=0" target="_blank" class="add-button">+</a>
+<div id="add-modal" class="modal-overlay" onclick="closeModal('add-modal')">
+    <div class="modal-content" style="max-width: 480px;" onclick="event.stopPropagation()">
+        <button class="modal-close" onclick="closeModal('add-modal')">×</button>
+        <div class="modal-title" style="font-size: 22px; margin-bottom: 20px;">➕ Pridať nové dobrodružstvo</div>
+        
+        <form id="trip-form" onsubmit="submitTrip(event)">
+            <div class="form-row">
+                <div>
+                    <label class="label">Mesto *</label>
+                    <input type="text" id="f-mesto" required placeholder="Napr. Paríž" class="form-input">
+                </div>
+                <div>
+                    <label class="label">Rok návštevy *</label>
+                    <input type="text" id="f-rok" required placeholder="2026 alebo Wishlist" class="form-input">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div>
+                    <label class="label">Lat (Šírka) *</label>
+                    <input type="text" id="f-lat" required placeholder="48.8566" class="form-input">
+                </div>
+                <div>
+                    <label class="label">Lng (Dĺžka) *</label>
+                    <input type="text" id="f-lng" required placeholder="2.3522" class="form-input">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div>
+                    <label class="label">Farba bodky</label>
+                    <input type="color" id="f-farba" value="#00ffcc" class="form-input" style="height: 41px; padding: 2px; cursor: pointer;">
+                </div>
+                <div>
+                    <label class="label">Typ dopravy</label>
+                    <input type="text" id="f-typ" placeholder="Auto / Lietadlo / Vlak" class="form-input">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="label">Štart cesty (Mesto odkiaľ vyrážaš)</label>
+                <input type="text" id="f-start" placeholder="Napr. Michalovce" class="form-input">
+            </div>
+
+            <div class="form-group">
+                <label class="label">Trasa (Mestá pre navigáciu oddelené bodkočiarkou)</label>
+                <input type="text" id="f-trasa" placeholder="Presov; Zilina; Bratislava" class="form-input">
+            </div>
+
+            <div class="form-group">
+                <label class="label">Tvoj popis / Zážitky</label>
+                <textarea id="f-popis" rows="3" placeholder="Aké to tam bolo? Čo ste zažili..." class="form-input form-textarea"></textarea>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 25px;">
+                <label class="label">Odkaz na fotoalbum (Google Photos...)</label>
+                <input type="url" id="f-album" placeholder="https://photos.google.com/..." class="form-input">
+            </div>
+
+            <button type="submit" id="submit-btn" style="width: 100%; background: #00ffcc; border: none; color: black; padding: 13px; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 15px; transition: 0.3s;">Odoslať výlet do mapy</button>
+        </form>
+    </div>
+</div>
+
+<button onclick="openAddModal(null, null)" class="add-button" style="border:none; cursor:pointer;">+</button>
 
 <script>
     const mapboxToken = 'pk.eyJ1IjoibWFreXl5IiwiYSI6ImNtbzVpc3FtdDB3ZjcycHNneTR5d2R3a2oifQ.Su6Onl3Dn-YL8XIPXRfB6g';
     const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSKxSWXvTdARJ382V_ddbLoem05pzFFn_oyDsbcSypciDETuXIHTlA9_xCmAYaZ_AklPPzGFVkpu9Ek/pub?output=csv';
+    const scriptUrl = 'https://script.google.com/macros/s/AKfycbze0JIRbupCEzBxNCBKxpsQLmJPzCpDHd1XZtUuG6fxpUh6fUzE9bOvUEgyxZXBkpk_uw/exec';
 
     mapboxgl.accessToken = mapboxToken;
     let allData = [];
@@ -319,7 +383,6 @@
 
             const t = (typ || '').toLowerCase();
             
-            // PRAVIDLO PRE LIETADLO: Ak ide o lietadlo, urobí sa rovno priama čiara a nevolá sa cestná navigácia
             if (t.includes('lietadlo')) {
                 drawStraightLine(validCoords, farba, routeId, typ);
                 return;
@@ -404,7 +467,6 @@
             const routeTitle = visit.Start ? `${visit.Start} ➔ ${visit.Mesto}` : visit.Mesto;
             const typeText = visit.Typ ? `(${visit.Typ})` : '';
 
-            // Opravená štruktúra - pridaný timeline-header, aby sa text neprekrýval s rokom
             item.innerHTML = `
                 <div class="timeline-header">
                     <span class="${badgeClass}">${badgeText}</span>
@@ -419,21 +481,73 @@
         document.getElementById('city-modal').classList.add('open');
     }
 
-    function closeModal() {
-        document.getElementById('city-modal').classList.remove('open');
+    // Funkcia na otvorenie formulára s voliteľným predvyplnením súradníc z kliknutia
+    function openAddModal(clickLat, clickLng) {
+        document.getElementById('trip-form').reset();
+        
+        if(clickLat !== null && clickLng !== null) {
+            document.getElementById('f-lat').value = clickLat;
+            document.getElementById('f-lng').value = clickLng;
+        }
+        
+        document.getElementById('add-modal').classList.add('open');
     }
 
+    function closeModal(modalId) {
+        document.getElementById(modalId).classList.remove('open');
+    }
+
+    // Odosielanie dát cez Apps Script na pozadí bez prebíjania stránky
+    function submitTrip(event) {
+        event.preventDefault();
+        
+        const btn = document.getElementById('submit-btn');
+        const oldText = btn.innerText;
+        btn.innerText = 'Ukladám do Google tabuľky... ⏳';
+        btn.style.opacity = '0.6';
+        btn.disabled = true;
+
+        const isWishlist = document.getElementById('f-rok').value.trim().toLowerCase() === 'wishlist';
+        const defaultColor = isWishlist ? '#ffb142' : document.getElementById('f-farba').value;
+
+        const tripData = {
+            mesto: document.getElementById('f-mesto').value,
+            lat: document.getElementById('f-lat').value,
+            lng: document.getElementById('f-lng').value,
+            rok: document.getElementById('f-rok').value,
+            farba: defaultColor,
+            start: document.getElementById('f-start').value,
+            trasa: document.getElementById('f-trasa').value,
+            typ: document.getElementById('f-typ').value,
+            popis: document.getElementById('f-popis').value,
+            album: document.getElementById('f-album').value
+        };
+
+        fetch(scriptUrl, {
+            method: 'POST',
+            mode: 'no-cors',
+            cache: 'no-cache',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(tripData)
+        }).then(() => {
+            alert('🎉 Paráda! Trip bol úspešne zapísaný. Pre prenesenie zmien na mapu stačí obnoviť (F5) stránku.');
+            closeModal('add-modal');
+            btn.innerText = oldText;
+            btn.style.opacity = '1';
+            btn.disabled = false;
+        }).catch(err => {
+            alert('Ojoj, niečo zlyhalo: ' + err);
+            btn.innerText = oldText;
+            btn.style.opacity = '1';
+            btn.disabled = false;
+        });
+    }
+
+    // NOVÉ INTELIGENTNÉ KLIKNUTIE NA MAPU: Automaticky otvorí formulár a nahodí súradnice
     map.on('click', (e) => {
-        const coords = `${e.lngLat.lng.toFixed(4)}, ${e.lngLat.lat.toFixed(4)}`;
-        new mapboxgl.Popup({ closeButton: true })
-            .setLngLat(e.lngLat)
-            .setHTML(`
-                <div style="padding:5px; text-align:center;">
-                    <span style="color:#888; font-size:10px; text-transform:uppercase;">Súradnice pre tabuľku</span><br>
-                    <div class="coords-popup" style="font-size:16px; margin-top:5px;">${coords}</div>
-                </div>
-            `)
-            .addTo(map);
+        const lat = e.lngLat.lat.toFixed(4);
+        const lng = e.lngLat.lng.toFixed(4);
+        openAddModal(lat, lng);
     });
 </script>
 </body>
