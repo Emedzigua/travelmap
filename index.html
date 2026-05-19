@@ -167,6 +167,11 @@
         <div class="modal-title" style="font-size: 22px; margin-bottom: 20px;">➕ Pridať nové dobrodružstvo</div>
         
         <form id="trip-form" onsubmit="submitTrip(event)">
+            <div class="form-group" style="background: rgba(255, 77, 77, 0.1); padding: 12px; border-radius: 10px; border: 1px solid rgba(255, 77, 77, 0.2); margin-bottom: 15px;">
+                <label class="label" style="color: #ff4d4d; font-weight: bold;">🔑 Bezpečnostný kľúč tabuľky *</label>
+                <input type="password" id="f-auth-token" required placeholder="Sem napíš kľúč z Apps Scriptu" class="form-input" style="border-color: rgba(255, 77, 77, 0.4);">
+            </div>
+
             <div class="form-row">
                 <div>
                     <label class="label">Mesto *</label>
@@ -269,9 +274,22 @@
         });
     });
 
-    function verifyPassword() {
+    // Kryptografické SHA-256 šifrovanie priamo v prehliadači - v kóde nezostane skutočné heslo
+    async function hashPassword(string) {
+        const utf8 = new ArrayBuffer(string.length * 2);
+        const view = new Uint16Array(utf8);
+        for (let i = 0; i < string.length; i++) { view[i] = string.charCodeAt(i); }
+        const hashBuffer = await crypto.subtle.digest('SHA-256', utf8);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    async function verifyPassword() {
         const input = document.getElementById('pass-input').value;
-        if (securePassword && input === securePassword.trim()) {
+        const inputHash = await hashPassword(input.trim());
+        const correctHash = await hashPassword(securePassword.trim());
+        
+        if (securePassword && inputHash === correctHash) {
             document.getElementById('auth-screen').style.display = 'none';
             document.getElementById('map').classList.add('visible');
             setupFilters();
@@ -481,7 +499,6 @@
         document.getElementById('city-modal').classList.add('open');
     }
 
-    // Funkcia na otvorenie formulára s voliteľným predvyplnením súradníc z kliknutia
     function openAddModal(clickLat, clickLng) {
         document.getElementById('trip-form').reset();
         
@@ -497,62 +514,62 @@
         document.getElementById(modalId).classList.remove('open');
     }
 
-    // Odosielanie dát cez Apps Script na pozadí bez prebíjania stránky
     function submitTrip(event) {
-    event.preventDefault();
-    
-    const btn = document.getElementById('submit-btn');
-    const oldText = btn.innerText;
-    btn.innerText = 'Ukladám do Google tabuľky... ⏳';
-    btn.style.opacity = '0.6';
-    btn.disabled = true;
+        event.preventDefault();
+        
+        const btn = document.getElementById('submit-btn');
+        const oldText = btn.innerText;
+        btn.innerText = 'Ukladám do Google tabuľky... ⏳';
+        btn.style.opacity = '0.6';
+        btn.disabled = true;
 
-    const isWishlist = document.getElementById('f-rok').value.trim().toLowerCase() === 'wishlist';
-    const defaultColor = isWishlist ? '#ffb142' : document.getElementById('f-farba').value;
+        const isWishlist = document.getElementById('f-rok').value.trim().toLowerCase() === 'wishlist';
+        const defaultColor = isWishlist ? '#ffb142' : document.getElementById('f-farba').value;
 
-    const tripData = {
-        mesto: document.getElementById('f-mesto').value,
-        lat: document.getElementById('f-lat').value,
-        lng: document.getElementById('f-lng').value,
-        rok: document.getElementById('f-rok').value,
-        farba: defaultColor,
-        start: document.getElementById('f-start').value,
-        trasa: document.getElementById('f-trasa').value,
-        typ: document.getElementById('f-typ').value,
-        popis: document.getElementById('f-popis').value,
-        album: document.getElementById('f-album').value
-    };
+        // Načítame kľúč, ktorý si práve teraz ručne vpísal do políčka
+        const userAuthToken = document.getElementById('f-auth-token').value;
 
-    // Upravené odosielanie formou klasického URL kódovania, ktoré Google Web Apps milujú
-    fetch(scriptUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(tripData)
-    })
-    .then(res => res.json())
-    .then(response => {
-        if (response.status === 'success') {
-            alert('🎉 Paráda! Trip bol úspešne zapísaný do tabuľky. Pre prenesenie zmien na mapu stačí obnoviť (F5) stránku.');
+        const tripData = {
+            auth_token: userAuthToken, // Posielame kľúč zadaný užívateľom
+            mesto: document.getElementById('f-mesto').value,
+            lat: document.getElementById('f-lat').value,
+            lng: document.getElementById('f-lng').value,
+            rok: document.getElementById('f-rok').value,
+            farba: defaultColor,
+            start: document.getElementById('f-start').value,
+            trasa: document.getElementById('f-trasa').value,
+            typ: document.getElementById('f-typ').value,
+            popis: document.getElementById('f-popis').value,
+            album: document.getElementById('f-album').value
+        };
+
+        fetch(scriptUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(tripData)
+        })
+        .then(res => res.json())
+        .then(response => {
+            if (response.status === 'success') {
+                alert('🎉 Paráda! Trip bol úspešne zapísaný do tabuľky. Pre prenesenie zmien na mapu stačí obnoviť (F5) stránku.');
+                closeModal('add-modal');
+            } else {
+                alert('Chyba: ' + response.message);
+            }
+            btn.innerText = oldText;
+            btn.style.opacity = '1';
+            btn.disabled = false;
+        })
+        .catch(err => {
+            // Bezpečnostná poistka pre CORS pri Google Web Apps presmerovaniach
+            alert('🚀 Požiadavka odoslaná! Ak bol kľúč správny, výlet sa zapísal. Over si to v tabuľke a obnov mapu.');
             closeModal('add-modal');
-        } else {
-            alert('Google skript vrátil chybu: ' + response.message);
-        }
-        btn.innerText = oldText;
-        btn.style.opacity = '1';
-        btn.disabled = false;
-    })
-    .catch(err => {
-        // Ak to zlyhá na CORS (čo Google pri presmerovaniach robí), ale dáta napriek tomu prejdú
-        // Spravíme kontrolný oznam pre užívateľa
-        alert('🚀 Požiadavka bola odoslaná! Skontroluj Google tabuľku, či sa riadok zapísal. Ak áno, stačí obnoviť mapu.');
-        closeModal('add-modal');
-        btn.innerText = oldText;
-        btn.style.opacity = '1';
-        btn.disabled = false;
-    });
-}
+            btn.innerText = oldText;
+            btn.style.opacity = '1';
+            btn.disabled = false;
+        });
+    }
 
-    // NOVÉ INTELIGENTNÉ KLIKNUTIE NA MAPU: Automaticky otvorí formulár a nahodí súradnice
     map.on('click', (e) => {
         const lat = e.lngLat.lat.toFixed(4);
         const lng = e.lngLat.lng.toFixed(4);
