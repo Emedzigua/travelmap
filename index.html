@@ -62,7 +62,7 @@
         .start-marker { width: 8px; height: 8px; border-radius: 50%; background: #fff; border: 1px solid #000; opacity: 0.7; pointer-events: none; z-index: 5; }
         .transport-icon { font-size: 24px; pointer-events: none; z-index: 10; text-shadow: 0 2px 10px rgba(0,0,0,0.8); }
 
-        /* Spoločné vlastnosti pre vyskakovacie okná (Modaly) */
+        /* Vyskakovacie okná (Modaly) */
         .modal-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(8px);
@@ -86,7 +86,7 @@
         .modal-title { font-size: 26px; font-weight: 800; color: #00ffcc; margin-bottom: 5px; padding-right: 30px; }
         .modal-subtitle { color: #666; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 25px; }
         
-        /* Časová os v detaile mesta */
+        /* Časová os */
         .timeline { border-left: 2px solid #252525; margin-left: 10px; padding-left: 25px; position: relative; }
         .timeline-item { position: relative; margin-bottom: 30px; padding-top: 2px; }
         .timeline-item:last-child { margin-bottom: 10px; }
@@ -201,7 +201,14 @@
                 </div>
                 <div>
                     <label class="label">Typ dopravy</label>
-                    <input type="text" id="f-typ" placeholder="Auto / Lietadlo / Vlak" class="form-input">
+                    <input type="text" id="f-typ" placeholder="Auto / Lietadlo / Vlak / Pešo" class="form-input">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div style="grid-column: span 2;">
+                    <label class="label">Kód krajiny (Napr. SK, CZ, AT, IT...) *</label>
+                    <input type="text" id="f-krajina" required maxlength="2" placeholder="SK" class="form-input" style="text-transform: uppercase;">
                 </div>
             </div>
 
@@ -211,7 +218,7 @@
             </div>
 
             <div class="form-group">
-                <label class="label">Trasa (Mestá pre navigáciu oddelené bodkočiarkou)</label>
+                <label class="label">Trasa (Mestá oddelené bodkočiarkou)</label>
                 <input type="text" id="f-trasa" placeholder="Presov; Zilina; Bratislava" class="form-input">
             </div>
 
@@ -221,7 +228,7 @@
             </div>
 
             <div class="form-group" style="margin-bottom: 25px;">
-                <label class="label">Odkaz na fotoalbum (Google Photos...)</label>
+                <label class="label">Odkaz na fotoalbum</label>
                 <input type="url" id="f-album" placeholder="https://photos.google.com/..." class="form-input">
             </div>
 
@@ -258,7 +265,10 @@
 
     function changeStyle(styleUrl) {
         map.setStyle(styleUrl);
-        map.once('styledata', () => renderMap(currentYear));
+        map.once('styledata', () => {
+            // Po zmene štýlu mapy musíme všetko prekresliť vrátane vyfarbených krajín
+            renderMap(currentYear);
+        });
     }
 
     fetch(csvUrl).then(res => res.text()).then(csvText => {
@@ -274,7 +284,6 @@
         });
     });
 
-    // Kryptografické SHA-256 šifrovanie priamo v prehliadači - v kóde nezostane skutočné heslo
     async function hashPassword(string) {
         const utf8 = new ArrayBuffer(string.length * 2);
         const view = new Uint16Array(utf8);
@@ -330,9 +339,15 @@
     }
 
     function renderMap(yearFilter) {
+        // Vyčistenie starých prvkov
         [...markers, ...startMarkers, ...transportMarkers].forEach(m => m.remove());
         routeLayers.forEach(l => { if(map.getLayer(l)) map.removeLayer(l); if(map.getSource(l)) map.removeSource(l); });
         markers = []; startMarkers = []; routeLayers = []; transportMarkers = [];
+
+        // Odstránenie starých vrstiev krajín, ak existujú
+        if (map.getLayer('country-fills')) map.removeLayer('country-fills');
+        if (map.getLayer('country-borders')) map.removeLayer('country-borders');
+        if (map.getSource('countries')) map.removeSource('countries');
 
         let filteredRows = allData.filter(row => {
             const lat = parseFloat(row.Lat);
@@ -340,6 +355,42 @@
             if (yearFilter === 'all') return (row.Rok || '').toLowerCase() !== 'wishlist';
             return (row.Rok || '').toLowerCase() === yearFilter.toLowerCase();
         });
+
+        // 5. FUNKCIA: VYFARBOVANIE KRAJÍN (Načítanie kódov zo stĺpca "Krajina")
+        let visitedCountries = [...new Set(filteredRows.map(r => r.Krajina ? r.Krajina.trim().toUpperCase() : '').filter(c => c.length === 2))];
+        
+        if (visitedCountries.length > 0 && map.getLayer('admin-0-boundary')) {
+            // Ak Mapbox obsahuje vrstvu s hranicami štátov, vieme ju zafarbiť
+            map.addSource('countries', {
+                type: 'vector',
+                url: 'mapbox://mapbox.country-boundaries-v1'
+            });
+
+            map.addLayer({
+                'id': 'country-fills',
+                'type': 'fill',
+                'source': 'countries',
+                'source-layer': 'country_boundaries',
+                'paint': {
+                    'fill-color': '#00ffcc',
+                    'fill-opacity': 0.08  // Jemný priesvitný efekt vyfarbenia
+                },
+                'filter': ['in', 'iso_3166_1', ...visitedCountries]
+            }, 'airport-label'); // Vloží vrstvu pod popisky, aby zostali čitateľné
+
+            map.addLayer({
+                'id': 'country-borders',
+                'type': 'line',
+                'source': 'countries',
+                'source-layer': 'country_boundaries',
+                'paint': {
+                    'line-color': '#00ffcc',
+                    'line-width': 1,
+                    'line-opacity': 0.3
+                },
+                'filter': ['in', 'iso_3166_1', ...visitedCountries]
+            }, 'airport-label');
+        }
 
         let uniqueCities = [...new Set(filteredRows.map(r => r.Mesto.trim().toLowerCase()))];
         document.getElementById('country-count').innerText = `${uniqueCities.length} ${uniqueCities.length === 1 ? 'mesto' : uniqueCities.length < 5 ? 'miesta' : 'miest'}`;
@@ -401,7 +452,8 @@
 
             const t = (typ || '').toLowerCase();
             
-            if (t.includes('lietadlo')) {
+            // 🚄 OPRAVA PRE VLAKY A LIETADLÁ: Vlak a lietadlo idú vzdušnou čiarou, aby navigácia nezlyhala
+            if (t.includes('lietadlo') || t.includes('vlak')) {
                 drawStraightLine(validCoords, farba, routeId, typ);
                 return;
             }
@@ -525,20 +577,19 @@
 
         const isWishlist = document.getElementById('f-rok').value.trim().toLowerCase() === 'wishlist';
         const defaultColor = isWishlist ? '#ffb142' : document.getElementById('f-farba').value;
-
-        // Načítame kľúč, ktorý si práve teraz ručne vpísal do políčka
         const userAuthToken = document.getElementById('f-auth-token').value;
 
         const tripData = {
-            auth_token: userAuthToken, // Posielame kľúč zadaný užívateľom
+            auth_token: userAuthToken,
             mesto: document.getElementById('f-mesto').value,
             lat: document.getElementById('f-lat').value,
             lng: document.getElementById('f-lng').value,
             rok: document.getElementById('f-rok').value,
             farba: defaultColor,
+            typ: document.getElementById('f-typ').value,
+            krajina: document.getElementById('f-krajina').value.toUpperCase(), // Nový stĺpec pre Google tabuľku
             start: document.getElementById('f-start').value,
             trasa: document.getElementById('f-trasa').value,
-            typ: document.getElementById('f-typ').value,
             popis: document.getElementById('f-popis').value,
             album: document.getElementById('f-album').value
         };
@@ -561,7 +612,6 @@
             btn.disabled = false;
         })
         .catch(err => {
-            // Bezpečnostná poistka pre CORS pri Google Web Apps presmerovaniach
             alert('🚀 Požiadavka odoslaná! Ak bol kľúč správny, výlet sa zapísal. Over si to v tabuľke a obnov mapu.');
             closeModal('add-modal');
             btn.innerText = oldText;
